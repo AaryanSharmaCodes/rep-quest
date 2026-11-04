@@ -1,0 +1,25 @@
+{
+ "built": "2026-11-04",
+ "files": [
+  "core.txt",
+  "india.txt",
+  "world-1.txt",
+  "world-2.txt",
+  "world-3.txt",
+  "world-4.txt",
+  "world-5.txt",
+  "world-6.txt",
+  "world-7.txt",
+  "world-8.txt"
+ ],
+ "counts": {
+  "curated": 238,
+  "indb": 863,
+  "usdaSurvey": 5194,
+  "usdaFoundation": 342,
+  "usdaLegacy": 7025,
+  "offIndia": 8843,
+  "offWorld": 444779
+ },
+ "total": 467284
+}
