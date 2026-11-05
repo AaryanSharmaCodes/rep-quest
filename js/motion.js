@@ -286,6 +286,37 @@ const Motion = (() => {
         done();
       };
     },
+    // The quote of the day, a word at a time. Tap to carry on, or it moves along by itself.
+    quoteSplash(text, label, done) {
+      const box = document.createElement('div');
+      box.id = 'splash';
+      box.setAttribute('role', 'button');
+      box.setAttribute('aria-label', `${text} Tap to continue`);
+      box.innerHTML = `<span class="splash-day"></span><p class="splash-q"></p><span class="splash-tap">Tap to continue</span>`;
+      box.querySelector('.splash-day').textContent = label;
+      const words = text.split(' ');
+      const line = box.querySelector('.splash-q');
+      words.forEach(w => { const s = document.createElement('span'); s.textContent = w; line.append(s, ' '); });
+      document.body.appendChild(box);
+      const live = on();
+      const gap = 70;
+      if (live) {
+        sp(box.querySelector('.splash-day'), [{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { dur: 0.4, bounce: 0.1, fill: 'backwards' });
+        line.querySelectorAll('span').forEach((s, n) => sp(s, [{ opacity: 0, transform: 'translateY(14px) scale(.96)' }, { opacity: 1, transform: 'none' }], { bounce: 0.25, dur: 0.42, delay: 180 + n * gap, fill: 'backwards' }));
+        box.querySelector('.splash-tap').animate([{ opacity: 0 }, { opacity: 1 }], { duration: 400, delay: 500 + words.length * gap, fill: 'backwards' });
+      }
+      let gone = false;
+      const close = () => {
+        if (gone) return;
+        gone = true;
+        clearTimeout(timer);
+        const finish = () => { box.remove(); done(); };
+        if (!on()) { finish(); return; }
+        sp(box, [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scale(1.05)' }], { bounce: 0, dur: 0.3, fill: 'forwards' }).onfinish = finish;
+      };
+      const timer = setTimeout(close, 3200 + words.length * 260);
+      box.addEventListener('click', close);
+    },
     // Moving between sheets slides like a navigation push.
     sheetPush(panel, back) {
       if (on()) [...panel.children].slice(0, 6).forEach(el => sp(el, [{ transform: `translateX(${back ? -26 : 26}px)`, opacity: 0 }, { transform: 'none', opacity: 1 }], { bounce: 0.1, dur: 0.3 }));

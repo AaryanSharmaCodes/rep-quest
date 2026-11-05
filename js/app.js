@@ -53,7 +53,7 @@ function render() {
   ui.enter = false;
   app.classList.remove('enter'); // a re-render mid-entrance must not replay it
   const html = onWelcome ? viewWelcome() : VIEWS[ui.tab]();
-  const screen = onWelcome ? `setup-${ui.setup.step}` : `${ui.tab}-${!!state.active}`;
+  const screen = onWelcome ? `setup-${ui.setup.step}-${guideSeen()}-${ui.guideOs}` : `${ui.tab}-${!!state.active}`;
   // Same screen: change only what changed. New screen: draw it fresh.
   if (!entering && ui.screen === screen && app.firstChild) Motion.morph(app, html);
   else app.innerHTML = html;
@@ -373,6 +373,23 @@ const A = {
     if (d.tab === 'progress') ui.coachAlert = false;
     render();
     window.scrollTo(0, 0);
+  },
+  guideOs(d) { ui.guideOs = d.v; ui.enter = true; haptic(); render(); window.scrollTo(0, 0); },
+  guideSheetOs(d) { ui.sheet.os = d.v; ui.sheet.q = null; haptic(); render(); },
+  guideSkip() {
+    try { localStorage.setItem('rq-guide-seen', '1'); } catch (e) { /* the guide just shows again next time */ }
+    ui.enter = true;
+    render();
+    window.scrollTo(0, 0);
+  },
+  async installNow() {
+    const prompt = ui.installEvent;
+    if (!prompt) return;
+    prompt.prompt();
+    const { outcome } = await prompt.userChoice;
+    ui.installEvent = null;
+    if (outcome === 'accepted') toast('Installed. Open Rep Quest from your home screen.');
+    render();
   },
   setupGo(d) { ui.setup.step = Number(d.n); ui.enter = true; haptic(); render(); window.scrollTo(0, 0); },
   setupBack() { A.setupGo({ n: ui.setup.step - 1 }); },
@@ -1023,6 +1040,7 @@ document.addEventListener('visibilitychange', () => {
     if (!document.activeElement || document.activeElement === document.body) render();
     swReg?.update().catch(() => {});
     applyUpdate();
+    dailyQuote();
   }
 });
 window.addEventListener('pagehide', flushSave);
@@ -1060,6 +1078,23 @@ function startUpdates() {
   navigator.serviceWorker.register('sw.js').then(reg => { swReg = reg; return reg.update(); }).catch(() => {});
 }
 
+/* ---------- Installing, and the quote of the day ---------- */
+// Chrome on Android lets the app offer its own Install button.
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  ui.installEvent = e;
+  if (!state.onboarded) render();
+});
+function dailyQuote() {
+  const k = today();
+  let seen = null;
+  try { seen = localStorage.getItem('rq-quote-day'); } catch (e) { return; }
+  // Never interrupt a workout, and let a Google sign-in land first.
+  if (seen === k || state.active || location.hash.includes('id_token')) return;
+  try { localStorage.setItem('rq-quote-day', k); } catch (e) { return; }
+  Motion.quoteSplash(quoteFor(k), parseKey(k).toLocaleDateString('en-IN', { weekday: 'long' }), () => { ui.enter = true; render(); });
+}
+
 /* ---------- Start ---------- */
 async function boot() {
   const saved = await readSave();
@@ -1075,6 +1110,7 @@ async function boot() {
   if (state.active) ui.tab = 'train'; // reopened mid-workout: go straight back to it
   try { await navigator.storage?.persist?.(); } catch (e) { /* optional */ }
   render();
+  dailyQuote();
   if (saved && (saved.v || 1) < 2) writeSave();
   if (state.active) requestWake();
   Cloud.start();

@@ -6,6 +6,7 @@ const ICON = {
   progress: '<svg viewBox="0 0 24 24"><path d="M3 3v18h18M7 15l4-5 3 3 6-7"/></svg>',
   you: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4.500 4-6.500 8-6.500s7 2 8 6.500"/></svg>',
   swap: '<svg viewBox="0 0 24 24"><path d="M4 8h13l-4-4M20 16H7l4 4"/></svg>',
+  share: '<svg viewBox="0 0 24 24"><path d="M12 15V3M8 7l4-4 4 4M7 11H5v10h14V11h-2"/></svg>',
   more: '<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.200"/><circle cx="12" cy="12" r="1.200"/><circle cx="19" cy="12" r="1.200"/></svg>',
   tick: '<svg viewBox="0 0 24 24"><path pathLength="1" d="M5 13l4.500 4.500L19 7"/></svg>',
   close: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
@@ -190,6 +191,7 @@ function viewToday() {
     <button class="level" data-a="go" data-tab="you" aria-label="Level ${s.level}"><b>${s.level}</b><span>Level</span></button>
   </header>
   <div class="xp"><div class="xp-track"><i data-k="xp" data-pct="${s.into / s.need * 100}" style="width:${s.into / s.need * 100}%"></i></div><p>${fmt(s.into)} / ${fmt(s.need)} XP</p></div>
+  <p class="day-quote">${esc(quoteFor(k))}</p>
   <section class="block first">
     <div class="q-head"><h2>Daily Quests</h2><span class="q-count">[${cleared.length} / ${quests.length}]</span></div>
     ${open.length ? `<ul class="quests">${open.map(q => questCard(q, info[q.id], fresh)).join('')}</ul>` : '<p class="all-clear">All quests cleared today.</p>'}
@@ -460,6 +462,7 @@ function viewYou() {
     <li><button class="row" data-a="openSheet" data-type="profile"><span>Height, age and activity</span><span class="dim">${p.heightCm ? `${p.heightCm} cm, ${p.age}` : 'Add details'}</span></button></li>
   </ul></section>
   <section class="block"><h2>Options</h2><ul class="rows">
+    ${isInstalled() ? '' : '<li><button class="row" data-a="openSheet" data-type="installGuide"><span>Add to your Home Screen</span></button></li>'}
     <li><label class="row"><span>Log reps in reserve</span><input type="checkbox" class="sw" data-f="setting" data-k="showRir" ${state.settings.showRir ? 'checked' : ''}></label></li>
     <li><label class="row"><span>Track waist too</span><input type="checkbox" class="sw" data-f="setting" data-k="showWaist" ${state.settings.showWaist ? 'checked' : ''}></label></li>
     <li><label class="row"><span>Animations</span><input type="checkbox" class="sw" data-f="setting" data-k="animations" ${state.settings.animations !== false ? 'checked' : ''}></label></li>
@@ -480,6 +483,49 @@ function viewYou() {
   <section class="block"><ul class="rows"><li><button class="row" data-a="openSheet" data-type="method"><span>The science behind the numbers</span></button></li>
     <li><button class="row" data-a="openSheet" data-type="about"><span>Data sources and credits</span></button></li>
     <li><button class="row" data-a="checkUpdate"><span>Check for updates</span><span class="dim">Version ${APP_VERSION}</span></button></li></ul></section>`;
+}
+
+/* ---------- How to put the app on your Home Screen ---------- */
+const guideStep = (n, title, text, img, alt) => `<li class="guide-step"><div class="guide-text"><span class="guide-n">${n}</span><div><h3>${title}</h3><p>${text}</p></div></div>${img ? `<img src="guide/${img}.jpg" alt="${alt}" loading="lazy">` : ''}</li>`;
+function guideSteps(os) {
+  if (os === 'android') {
+    return `${ui.installEvent ? '<button class="btn solid guide-install" data-a="installNow">Install Rep Quest</button><p class="dim sm center">One tap. Or do it by hand:</p>' : ''}
+      <ol class="guide-steps">
+      ${guideStep(1, 'Open the Chrome menu', 'Tap the <b>⋮</b> menu at the top right, then tap <b>Install app</b> or <b>Add to Home screen</b>.', 'android-menu', 'Chrome menu on Android with Install app marked by an arrow')}
+      ${guideStep(2, 'Tap Install', 'Confirm on the screen that pops up.', 'android-install', 'Install confirmation on Android with an Install button')}
+      ${guideStep(3, 'Open it from your home screen', 'Look for the Rep Quest icon. It opens full screen, and signing in with Google keeps your data with you everywhere.', 'android-home', 'New app icon on an Android home screen')}
+      </ol>`;
+  }
+  return `<ol class="guide-steps">
+    ${guideStep(1, 'Tap the Share button', `In Safari, it's the ${i('share')} button at the bottom of the screen. On the newest iPhones, tap ${i('more')} first, then <b>Share</b>.`)}
+    ${guideStep(2, 'Tap Add to Home Screen', 'Scroll down the list to find it. If it isn\'t there, tap <b>View More</b>.', 'ios-add', 'iPhone share menu with Add to Home Screen marked by an arrow')}
+    ${guideStep(3, 'Tap Add', 'Leave <b>Open as Web App</b> switched on if you see it.', 'ios-confirm', 'Add to Home Screen confirmation on iPhone with Add at the top right')}
+    ${guideStep(4, 'Open it from your Home Screen', 'Look for the Rep Quest icon and open it. Sign in with Google there too, and your data follows you between the site and the app.', 'ios-home', 'New app icon on an iPhone Home Screen')}
+    </ol>`;
+}
+const guideCredit = '<p class="guide-credit">These screens show a different app, and yours may look a little different. Screenshots by Mozilla Contributors, <a href="https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Installing" target="_blank" rel="noopener">MDN Web Docs</a>, <a href="https://creativecommons.org/licenses/by-sa/2.5/" target="_blank" rel="noopener">CC BY-SA 2.5</a>, cropped.</p>';
+const guideSwitch = os => `<div class="seg">${[['iphone', 'iPhone'], ['android', 'Android']].map(([k, l]) => `<button class="${os === k ? 'on' : ''}" data-a="guideOs" data-v="${k}">${l}</button>`).join('')}</div>`;
+function viewInstallGuide() {
+  const os = ui.guideOs;
+  if (!os) {
+    return `<section class="welcome guide-ask">
+      <h1>Make it an app</h1>
+      <p>Rep Quest lives on your Home Screen, opens full screen and works offline. It takes about 20 seconds, with nothing to download from a store.</p>
+      <h3 class="sh-sub">Which phone do you have?</h3>
+      <div class="plan-cards">
+        <button class="plan-card" data-a="guideOs" data-v="iphone"><b>iPhone</b><span>Using Safari</span></button>
+        <button class="plan-card" data-a="guideOs" data-v="android"><b>Android</b><span>Using Chrome</span></button>
+      </div>
+      <button class="link" data-a="guideSkip">Skip for now</button>
+    </section>`;
+  }
+  return `<section class="guide"><h1>Add to Home Screen</h1>
+    ${guideSwitch(os)}
+    ${guideSteps(os)}
+    ${guideCredit}
+    <button class="btn line wide" data-a="guideSkip">Continue in the browser for now</button>
+    <p class="dim sm center">You can do this later from the You tab.</p>
+  </section>`;
 }
 
 /* ---------- First-time setup ---------- */
@@ -507,6 +553,7 @@ function viewWelcome() {
     return `<section class="welcome"><h1>Rep Quest</h1><p>Loading your account...</p><button class="link strong" data-a="cloudRetry">Try again</button></section>`;
   }
   const s = ui.setup;
+  if (!me && s.step < 1 && !isInstalled() && !guideSeen()) return viewInstallGuide();
   if (me && s.step < 1) { s.step = 1; s.name = s.name || (me.name || '').split(' ')[0]; }
   if (s.step < 1) {
     return `<section class="welcome">

@@ -211,6 +211,12 @@ const SHEETS = {
       <button class="link danger block-link" data-a="deleteDay">Delete this workout</button>`;
   },
 
+  installGuide(s) {
+    const os = s.os || (/android/i.test(navigator.userAgent) ? 'android' : 'iphone');
+    return `${sheetHead('Add to Home Screen', 'Full screen, offline, like any other app')}
+      <div class="seg">${[['iphone', 'iPhone'], ['android', 'Android']].map(([k, l]) => `<button class="${os === k ? 'on' : ''}" data-a="guideSheetOs" data-v="${k}">${l}</button>`).join('')}</div>
+      ${guideSteps(os)}${guideCredit}`;
+  },
   homeGear(s) {
     const g = state.settings.homeGear;
     const day = findDay(s.id);
@@ -289,6 +295,7 @@ const SHEETS = {
         <li><b>Typical estimates</b><p class="sm dim">About 240 everyday dishes written by hand. Oil and portion size can change them a lot.</p></li>
         <li><b>free-exercise-db</b><p class="sm dim">Exercise instructions and images, released into the public domain under the Unlicense.</p></li>
         <li><b>html5-qrcode</b><p class="sm dim">Barcode reading, Apache 2.0.</p></li>
+        <li><b>Install guide screenshots</b><p class="sm dim">Cropped from MDN Web Docs by Mozilla Contributors, CC BY-SA 2.5.</p></li>
         <li><b>canvas-confetti, Motion and morphdom</b><p class="sm dim">Celebrations, spring physics and smooth screen updates. ISC and MIT licences.</p></li>
         <li><b>Cinzel, Cinzel Decorative, Silkscreen and Instrument Sans</b><p class="sm dim">Typefaces under the SIL Open Font License.</p></li>
       </ul>
