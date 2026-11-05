@@ -62,7 +62,7 @@ function defaultState() {
     onboarded: false,
     profile: { name: '', sex: null, age: null, heightCm: null, activity: 'moderate', startDate: null },
     goal: { mode: 'recomp', lo: GOALS.recomp.lo, hi: GOALS.recomp.hi },
-    targets: { kcal: 2500, protein: 160, carbs: 300, fat: 70, steps: 8000, sleep: 7.5, water: 3 },
+    targets: { kcal: 2500, protein: 160, carbs: 300, fat: 70, sleep: 7.5, water: 3 },
     targetLog: [],
     program: makeProgram('final'),
     muscleGoal: { lo: 10, hi: 20 },
@@ -142,7 +142,7 @@ function migrate(saved) {
 let state = defaultState();
 const ui = {
   tab: 'today', openedOn: today(), foodDate: today(), logDate: today(), planDay: new Date().getDay(), sheet: null, sheetStack: [],
-  range: 90, rest: null, liftChart: null, lastLoaded: {}, searchToken: 0, foodIndex: {}, foodDb: { loaded: 0, total: 0, done: false },
+  range: 90, rest: null, liftChart: null, lastCleared: {}, searchToken: 0, foodIndex: {}, foodDb: { loaded: 0, total: 0, done: false },
   charts: {}, swapScope: 'today', foodTab: 'all', fresh: true,
 };
 
@@ -198,52 +198,51 @@ function coachNow() {
   return runCoach({ today: today(), days, workouts: state.workouts, targets: state.targets, goal: state.goal, profile: state.profile, lastChange: lastCalorieChange() });
 }
 
-/* ---------- Plates for one day ---------- */
-function platesFor(k) {
-  const d = peekDay(k), t = dayTotals(k), tg = targetsOn(k), now = state.targets;
+/* ---------- Quests for one day ---------- */
+function questsFor(k) {
+  const d = peekDay(k), t = dayTotals(k), tg = targetsOn(k);
   const planned = plannedDay(k), trained = workoutsOn(k).length > 0;
   const restDay = !planned && !trained;
   const done = {
     train: trained || restDay,
     protein: t.p >= tg.protein - 5,
     calories: t.items > 0 && Math.abs(t.kcal - tg.kcal) <= 150,
-    steps: (d.steps || 0) >= now.steps,
     weigh: d.weight != null,
   };
-  return PLATES.map(p => ({ ...p, done: done[p.id] }));
+  return QUESTS.map(q => ({ ...q, done: done[q.id] }));
 }
-function barFor(k) { return barWeight(platesFor(k).filter(p => p.done)); }
 function dayCounts(k) {
-  // A rest day's plate alone doesn't keep a streak alive: something has to be logged.
+  // A rest day's free quest alone doesn't keep a streak alive: something has to be logged.
   const d = peekDay(k), t = dayTotals(k);
-  const logged = d.weight != null || t.items > 0 || workoutsOn(k).length > 0 || d.steps != null;
-  return logged && platesFor(k).filter(p => p.done).length >= 3;
+  const logged = d.weight != null || t.items > 0 || workoutsOn(k).length > 0;
+  return logged && questsFor(k).filter(q => q.done).length >= 3;
 }
 function computeStats() {
-  let lifetime = 0, volume = 0, sets = 0, prs = 0, fullBars = 0;
+  let xp = 0, volume = 0, sets = 0, prs = 0, clearedDays = 0;
   Object.keys(state.days).forEach(k => {
     if (k > today()) return;
     const d = state.days[k], t = dayTotals(k);
-    const logged = d.weight != null || t.items > 0 || d.steps != null;
+    const logged = d.weight != null || t.items > 0;
     if (!logged) return;
-    lifetime += barFor(k);
-    if (platesFor(k).every(p => p.done)) fullBars++;
+    const quests = questsFor(k);
+    xp += dayXp(quests.filter(q => q.done));
+    if (quests.every(q => q.done)) clearedDays++;
   });
   state.workouts.forEach(w => {
     prs += (w.prs || []).length;
-    lifetime += 100 + (w.prs || []).length * 50;
+    xp += 100 + (w.prs || []).length * 50;
     w.exercises.forEach(e => e.sets.forEach(s => { if (isWorking(s)) { sets++; volume += (s.w || 0) * (s.r || 0); } }));
   });
   let streak = 0, cursor = today();
   if (!dayCounts(cursor)) cursor = addDays(cursor, -1); // today isn't over yet, so it can't break a streak
   while (dayCounts(cursor)) { streak++; cursor = addDays(cursor, -1); }
-  return { lifetime, volume, sets, prs, fullBars, streak, workouts: state.workouts.length, ...levelFor(lifetime) };
+  return { xp, volume, sets, prs, clearedDays, streak, workouts: state.workouts.length, ...levelFor(xp) };
 }
 
 const MILESTONES = [
   ['First session', 'Finish a workout', s => s.workouts >= 1],
   ['New best', 'Beat a personal best', s => s.prs >= 1],
-  ['Full bar', 'Load all five plates in a day', s => s.fullBars >= 1],
+  ['All clear', 'Clear every quest in a day', s => s.clearedDays >= 1],
   ['Ten sessions', '10 workouts', s => s.workouts >= 10],
   ['Week straight', '7-day streak', s => s.streak >= 7],
   ['Ten tonnes', 'Lift 10,000 kg in total', s => s.volume >= 10000],

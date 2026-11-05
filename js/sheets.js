@@ -19,11 +19,10 @@ const SHEETS = {
       ${cur != null ? `<button class="link danger block-link" data-a="clearWeight" data-k="${date}">Remove this weigh-in</button>` : ''}`;
   },
   log(s) {
-    const date = s.date || today(), d = peekDay(date), t = state.targets;
+    const date = s.date || today(), d = peekDay(date);
     return `${sheetHead(`Log for ${niceDate(date)}`)}
       <div class="datebar slim"><button class="ic-btn" data-a="logDay" data-n="-1" aria-label="Previous day">${i('back')}</button><b>${niceDate(date)}</b>${date < today() ? `<button class="ic-btn" data-a="logDay" data-n="1" aria-label="Next day">${i('next')}</button>` : '<span class="ic-btn"></span>'}</div>
       <div class="form">
-        ${field(`Steps, goal ${fmt(t.steps)}`, 'l-steps', d.steps, 'inputmode="numeric"')}
         <div class="two">${field(`Sleep, h`, 'l-sleep', d.sleep, 'inputmode="decimal"')}${field('Water, L', 'l-water', d.water, 'inputmode="decimal"')}</div>
         ${field('Cardio, minutes', 'l-cardio', d.cardio, 'inputmode="numeric"')}
         ${state.settings.showWaist ? field('Waist, cm', 'l-waist', d.waist, 'inputmode="decimal"') : ''}
@@ -101,7 +100,7 @@ const SHEETS = {
     return `${sheetHead('Workout done')}
       <p class="done-num"><b>${fmt(vol)}</b> kg lifted</p>
       <dl class="tally"><div><dd>${sets}</dd><dt>Sets</dt></div><div><dd>${mins}</dd><dt>Minutes</dt></div><div><dd>${(w.prs || []).length}</dd><dt>New bests</dt></div></dl>
-      ${(w.prs || []).length ? `<ul class="prs">${w.prs.map(p => `<li><i class="chip" style="background:var(--yellow)"></i><span>${esc(p.name)}</span><b>${esc(setText(p, p.unit))}</b></li>`).join('')}</ul>` : '<p class="dim">No new bests today, and that still counts. Next session\'s targets are ready.</p>'}
+      ${(w.prs || []).length ? `<ul class="prs">${w.prs.map(p => `<li><i class="chip" style="background:var(--carbs)"></i><span>${esc(p.name)}</span><b>${esc(setText(p, p.unit))}</b></li>`).join('')}</ul>` : '<p class="dim">No new bests today, and that still counts. Next session\'s targets are ready.</p>'}
       <button class="btn line wide" data-a="logWalk">Log a 20-minute incline walk</button>
       <button class="btn solid wide" data-a="closeAll">Done</button>`;
   },
@@ -235,7 +234,7 @@ const SHEETS = {
         <p class="sm dim" id="macro-sum">${macroSumText(t.protein, t.carbs, t.fat, t.kcal)}</p>
         <button class="link" type="button" data-a="balanceCarbs">Set carbs to fit the calories</button>
         ${pr ? `<p class="sm dim">At ${round(w, 1)} kg, research suggests ${pr[0]} to ${pr[1]} g protein ${refLinks(['morton18', 'iraki19'])} and ${fr[0]} to ${fr[1]} g fat ${refLinks(['iraki19'])}.</p>` : ''}
-        <div class="three">${field('Steps', 't-steps', t.steps, 'inputmode="numeric"')}${field('Sleep, h', 't-sleep', t.sleep, 'inputmode="decimal"')}${field('Water, L', 't-water', t.water, 'inputmode="decimal"')}</div>
+        <div class="two">${field('Sleep, h', 't-sleep', t.sleep, 'inputmode="decimal"')}${field('Water, L', 't-water', t.water, 'inputmode="decimal"')}</div>
         <button class="btn solid wide" data-a="saveTargets">Save targets</button></div>`;
   },
   goal(s) {
@@ -255,7 +254,7 @@ const SHEETS = {
       <li>You ate <b>${fmt(c.intake)} kcal a day</b>${c.hasIntake ? ` (${c.loggedDays} logged days)` : ' (assumed from your target, since few days are logged)'}.</li>
       <li>So your food plus weight change says you burn <b>${fmt(c.measured)} kcal</b>.</li>
       ${c.formula ? `<li>The formula alone says <b>${fmt(c.formula)} kcal</b>. The two are blended by how reliable each is, giving <b>${fmt(c.tdee)} kcal</b>.</li>` : ''}
-      <li>The coach only suggests a change when it's about 90% sure your rate is outside your range. Steps are limited to ${MAX_STEP} kcal, and each new target gets its own ${UNLOCK_WEIGH_INS} days.</li></ol>` : '<p class="dim">Your own numbers will appear here once the coach starts.</p>';
+      <li>The coach only suggests a change when it's about 90% sure your rate is outside your range. Each change is limited to ${MAX_STEP} kcal, and each new target gets its own ${UNLOCK_WEIGH_INS} days.</li></ol>` : '<p class="dim">Your own numbers will appear here once the coach starts.</p>';
     return `${sheetHead('The science behind the numbers')}
       <h3 class="sh-sub">Your numbers right now</h3>${numbers}
       <h3 class="sh-sub">Why 10 days is the minimum, not a promise</h3>

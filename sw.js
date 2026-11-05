@@ -1,9 +1,9 @@
 // Keeps the app opening offline (gyms have bad signal).
 // The app itself: serve the saved copy instantly and refresh it in the background.
 // The food files are large and only change with a rebuild, so they're fetched once and kept.
-const CACHE = 'rep-quest-v2';
+const CACHE = 'rep-quest-v3';
 const DATA_CACHE = 'rep-quest-data-v1';
-const SHELL = ['./', 'index.html', 'styles.css', 'js/util.js', 'js/science.js', 'js/library.js', 'js/core.js', 'js/foods.js', 'js/charts.js', 'js/views.js', 'js/sheets.js', 'js/app.js', 'food-worker.js', 'manifest.webmanifest', 'fonts/big-shoulders.woff2', 'fonts/instrument-sans.woff2', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
+const SHELL = ['./', 'index.html', 'styles.css', 'js/util.js', 'js/science.js', 'js/library.js', 'js/core.js', 'js/foods.js', 'js/charts.js', 'js/views.js', 'js/sheets.js', 'js/app.js', 'food-worker.js', 'manifest.webmanifest', 'fonts/cinzel.woff2', 'fonts/cinzel-deco-700.woff2', 'fonts/instrument-sans.woff2', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));

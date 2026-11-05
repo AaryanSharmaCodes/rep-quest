@@ -384,7 +384,7 @@ const A = {
   logDay(d) { ui.sheet.date = addDays(ui.sheet.date || today(), Number(d.n)); render(); },
   saveLog(d) {
     const day = getDay(d.k);
-    [['steps', 'l-steps'], ['sleep', 'l-sleep'], ['water', 'l-water'], ['cardio', 'l-cardio'], ['waist', 'l-waist']].forEach(([key, id]) => {
+    [['sleep', 'l-sleep'], ['water', 'l-water'], ['cardio', 'l-cardio'], ['waist', 'l-waist']].forEach(([key, id]) => {
       if (!document.getElementById(id)) return;
       const n = num(v(id));
       if (n == null) delete day[key]; else day[key] = n;
@@ -739,7 +739,7 @@ const A = {
   },
   saveTargets() {
     const t = state.targets, before = `${t.kcal}/${t.protein}/${t.carbs}/${t.fat}`;
-    const next = { kcal: num(v('t-kcal')), protein: num(v('t-protein')), carbs: num(v('t-carbs')), fat: num(v('t-fat')), steps: num(v('t-steps')), sleep: num(v('t-sleep')), water: num(v('t-water')) };
+    const next = { kcal: num(v('t-kcal')), protein: num(v('t-protein')), carbs: num(v('t-carbs')), fat: num(v('t-fat')), sleep: num(v('t-sleep')), water: num(v('t-water')) };
     if (Object.values(next).some(x => x == null || x < 0)) { toast('Fill in every target'); return; }
     if (!state.targetLog.length) state.targetLog.push({ date: state.profile.startDate || addDays(today(), -14), kcal: t.kcal, protein: t.protein, carbs: t.carbs, fat: t.fat, reason: 'Starting target' });
     if (next.kcal !== t.kcal) state.kcalChangedOn = today();

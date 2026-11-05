@@ -1,6 +1,7 @@
 'use strict';
 // Small hand-drawn charts. Text stays in ink colours; only marks carry colour. One axis per chart.
-const chartWidth = () => clamp((document.documentElement.clientWidth || window.innerWidth || 375) - 40, 260, 640);
+// Page gutters are 16 px and most charts sit inside a panel with 14 px of padding.
+const chartWidth = () => clamp((document.documentElement.clientWidth || window.innerWidth || 375) - 60, 240, 620);
 
 function niceTicks(lo, hi, count = 3) {
   const span = hi - lo || 1;
@@ -67,7 +68,7 @@ function hideCursor(el) {
 }
 
 // Daily bars with a target line. Today is brighter so it reads as still in progress.
-function barChart({ id, days, get, target, color = 'var(--chalk)', height = 120, unit = '' }) {
+function barChart({ id, days, get, target, color = 'var(--accent)', height = 120, unit = '' }) {
   const W = chartWidth(), H = height, padB = 20, padT = 8, padR = 34;
   const vals = days.map(d => get(d) || 0);
   const peak = Math.max(...vals, target || 0, 1) * 1.08;
@@ -103,29 +104,8 @@ function heatmap(weeks = 18) {
     if (k > end) { cells += '<i class="h-off"></i>'; continue; }
     const trained = workoutsOn(k).length > 0;
     const logged = trained || peekDay(k).weight != null || dayTotals(k).items > 0;
-    const full = platesFor(k).every(p => p.done) && logged;
+    const full = questsFor(k).every(q => q.done) && logged;
     cells += `<i class="${full ? 'h-full' : trained ? 'h-train' : logged ? 'h-log' : ''}" title="${shortDate(k)}"></i>`;
   }
   return `<div class="heat" style="--w:${weeks}">${cells}</div>`;
-}
-
-// The hero: a loaded barbell seen from the side. Plates drop on as the day's jobs get done.
-function barbellSVG(plates, justLoaded = []) {
-  const W = chartWidth(), H = 96, mid = H / 2, cx = W / 2;
-  const on = plates.filter(p => p.done);
-  const thick = 13, gap = 2;
-  const sleeveStart = cx * 0.26;
-  const draw = (side) => on.map((p, i) => {
-    const offset = sleeveStart + i * (thick + gap);
-    const x = side < 0 ? cx - offset - thick : cx + offset;
-    const fresh = justLoaded.includes(p.id);
-    return `<rect class="plate${fresh ? ' drop' : ''}" x="${x}" y="${mid - p.h / 2}" width="${thick}" height="${p.h}" rx="2.5" fill="${p.color}" style="--from:${side * 26}px"/>`;
-  }).join('');
-  const sleeveEnd = sleeveStart + 5 * (thick + gap) + 10;
-  return `<svg class="bar-svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Barbell with ${on.length} of 5 plates loaded">
-    <rect x="${cx - sleeveStart}" y="${mid - 2.5}" width="${sleeveStart * 2}" height="5" rx="1" fill="#74767d"/>
-    <rect x="${cx - sleeveEnd}" y="${mid - 4.5}" width="${sleeveEnd - sleeveStart}" height="9" rx="2" fill="#a2a4aa"/>
-    <rect x="${cx + sleeveStart}" y="${mid - 4.5}" width="${sleeveEnd - sleeveStart}" height="9" rx="2" fill="#a2a4aa"/>
-    <rect x="${cx - sleeveStart - 3}" y="${mid - 9}" width="3" height="18" rx="1" fill="#a2a4aa"/><rect x="${cx + sleeveStart}" y="${mid - 9}" width="3" height="18" rx="1" fill="#a2a4aa"/>
-    ${draw(-1)}${draw(1)}</svg>`;
 }

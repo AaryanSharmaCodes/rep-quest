@@ -92,8 +92,6 @@ function adviceList() {
   }
   const sleep = series('sleep', 7).map(x => x.v);
   if (sleep.length >= 4 && avg(sleep) < 7) add({ id: 'sleep', title: `Sleep is averaging ${round(avg(sleep), 1)} h`, body: `Your plan asks for ${tg.sleep} to 9 hours. Recovery shows up in your lifts before anywhere else.` });
-  const steps = series('steps', 7).map(x => x.v);
-  if (steps.length >= 4 && avg(steps) < tg.steps * 0.8) add({ id: 'steps', title: `Steps are averaging ${fmt(avg(steps))}`, body: `Below your ${fmt(tg.steps)} target. Lower activity also lowers what you burn, which the coach will pick up.` });
 
   if (!state.dismissed.creatine) add({ id: 'creatine', title: 'Creatine is the one supplement your plan prioritises', body: '3 to 5 g every day, including rest days. You can log it as a food to remember it.', refs: ['kreider17'], once: true });
   const backedUp = state.lastBackup ? daysBetween(state.lastBackup, now) : 999;
@@ -119,49 +117,76 @@ function adviceRow(o) {
 }
 
 /* ---------- Today ---------- */
+function questCard(q, info, fresh) {
+  const pct = info.pct == null ? null : clamp(info.pct, 0, 1);
+  return `<li><button ${info.open} class="quest${q.done ? ' done' : ''}${fresh.includes(q.id) ? ' fresh' : ''}">
+    <span class="q-main"><span class="q-name">${info.label}</span><span class="q-sub">${info.sub}</span></span>
+    <span class="q-val">[${info.value}]</span>
+    <span class="q-mark">${q.done ? i('tick') : i('next')}</span>
+    ${pct != null && !q.done ? `<i class="q-fill" style="width:${pct * 100}%"></i>` : ''}
+  </button></li>`;
+}
 function viewToday() {
-  const k = today(), plates = platesFor(k), on = plates.filter(p => p.done);
-  const kg = barWeight(on), full = barWeight(plates);
-  const prev = ui.lastLoaded[k];
-  const fresh = prev ? on.filter(p => !prev.includes(p.id)).map(p => p.id) : [];
-  ui.lastLoaded[k] = on.map(p => p.id);
+  const k = today(), quests = questsFor(k), cleared = quests.filter(q => q.done), open = quests.filter(q => !q.done);
+  const prev = ui.lastCleared[k];
+  const fresh = prev ? cleared.filter(q => !prev.includes(q.id)).map(q => q.id) : [];
+  ui.lastCleared[k] = cleared.map(q => q.id);
   if (fresh.length) setTimeout(playClang, 120);
   const s = computeStats(), d = peekDay(k), t = dayTotals(k), tg = state.targets;
-  const plan = plannedDay(k), trained = workoutsOn(k);
+  const plan = plannedDay(k), trained = workoutsOn(k), a = state.active;
   const date = parseKey(k);
-  const value = {
-    train: state.active ? 'In progress' : trained.length ? esc(trained[0].name) : plan ? esc(plan.name) : 'Rest day',
-    protein: `${Math.round(t.p)} of ${tg.protein} g`,
-    calories: `${fmt(t.kcal)} of ${fmt(tg.kcal)}`,
-    steps: d.steps != null ? `${fmt(d.steps)} of ${fmt(tg.steps)}` : `Goal ${fmt(tg.steps)}`,
-    weigh: d.weight != null ? `${d.weight} kg` : 'Not yet',
+  const setsDone = a ? sum(a.exercises.map(e => e.sets.filter(x => x.done && isWorking(x)).length)) : 0;
+  const setsAll = a ? sum(a.exercises.map(e => e.sets.filter(isWorking).length)) : 0;
+  const kcalLeft = tg.kcal - t.kcal, proteinLeft = Math.max(0, tg.protein - t.p);
+  const info = {
+    train: {
+      label: plan || trained.length ? 'Train' : 'Recover',
+      value: a ? 'In progress' : trained.length ? esc(trained[0].name) : plan ? esc(plan.name) : 'Rest day',
+      sub: a ? `${setsDone} of ${setsAll} sets` : trained.length ? 'Workout finished' : plan ? `${plan.exercises.length} exercises, ${sum(plan.exercises.map(e => e.sets))} sets` : 'Eat normally, recover',
+      pct: a && setsAll ? setsDone / setsAll : null,
+      open: 'data-a="go" data-tab="train"',
+    },
+    protein: {
+      label: 'Protein', value: `${Math.round(t.p)} / ${tg.protein} g`,
+      sub: proteinLeft > 0 ? `${Math.round(proteinLeft)} g left` : 'Target reached',
+      pct: t.p / tg.protein, open: 'data-a="go" data-tab="food"',
+    },
+    calories: {
+      label: 'Calories', value: `${fmt(t.kcal)} / ${fmt(tg.kcal)}`,
+      sub: kcalLeft >= 0 ? `${fmt(kcalLeft)} kcal left` : `${fmt(-kcalLeft)} kcal over`,
+      pct: t.kcal / tg.kcal, open: 'data-a="go" data-tab="food"',
+    },
+    weigh: {
+      label: 'Weigh in', value: d.weight != null ? `${d.weight} kg` : 'Not yet',
+      sub: d.weight != null ? 'Logged today' : 'Morning, before food',
+      pct: null, open: 'data-a="openSheet" data-type="weight"',
+    },
   };
-  const label = { train: plan || trained.length ? 'Train' : 'Recover', protein: 'Protein', calories: 'Calories', steps: 'Steps', weigh: 'Weigh in' };
-  const open = { train: 'data-a="go" data-tab="train"', protein: 'data-a="go" data-tab="food"', calories: 'data-a="go" data-tab="food"', steps: 'data-a="openSheet" data-type="log"', weigh: 'data-a="openSheet" data-type="weight"' };
   const wkStart = weekStart(k);
   const week = WEEK_ORDER.map((wd, n) => {
     const day = addDays(wkStart, n), future = day > k;
-    const count = future ? 0 : platesFor(day).filter(p => p.done).length;
+    const count = future ? 0 : questsFor(day).filter(q => q.done).length;
     const hasLog = !future && (peekDay(day).weight != null || dayTotals(day).items > 0 || workoutsOn(day).length > 0 || day === k);
-    return `<div class="wk${day === k ? ' now' : ''}"><div class="wk-stack">${[0, 1, 2, 3, 4].map(n2 => `<i class="${hasLog && n2 < count ? 'on' : ''}"></i>`).join('')}</div><span>${DAY_SHORT[wd][0]}</span></div>`;
+    const shown = hasLog ? count : 0;
+    return `<div class="wk${day === k ? ' now' : ''}${shown === QUESTS.length ? ' all' : ''}" aria-label="${DAY_SHORT[wd]}: ${shown} of ${QUESTS.length} quests"><i style="--p:${shown / QUESTS.length}"></i><span>${DAY_SHORT[wd][0]}</span></div>`;
   }).join('');
-  const advice = adviceList().slice(0, 3);
+  // Weighing in is already a quest, so it doesn't need a second reminder here.
+  const advice = adviceList().filter(x => x.id !== 'weigh').slice(0, 2);
+  const startBtn = !a && plan && !trained.length ? `<button class="btn solid wide" data-a="startDay" data-id="${plan.id}">Start ${esc(plan.name)}</button>` : '';
   return `
   <header class="top">
     <div><h1>${date.toLocaleDateString('en-IN', { weekday: 'long' })}</h1><p class="dim">${shortDate(k)}${s.streak > 1 ? `, ${s.streak}-day streak` : ''}</p></div>
     <button class="level" data-a="go" data-tab="you" aria-label="Level ${s.level}"><b>${s.level}</b><span>Level</span></button>
   </header>
-  <section class="hero">
-    ${barbellSVG(plates, fresh)}
-    <p class="hero-num"><b data-count="${kg}">${kg}</b> kg on the bar</p>
-    <p class="dim">${on.length === 5 ? 'Full bar. Every job done today.' : `Finish today's jobs to load ${full} kg.`}</p>
+  <div class="xp"><div class="xp-track"><i style="width:${s.into / s.need * 100}%"></i></div><p>${fmt(s.into)} / ${fmt(s.need)} XP</p></div>
+  <section class="block first">
+    <div class="q-head"><h2>Daily Quests</h2><span class="q-count">[${cleared.length} / ${quests.length}]</span></div>
+    ${open.length ? `<ul class="quests">${open.map(q => questCard(q, info[q.id], fresh)).join('')}</ul>` : '<p class="all-clear">All quests cleared today.</p>'}
+    ${startBtn}
   </section>
-  <ul class="jobs">
-    ${plates.map(p => `<li><button ${open[p.id]} class="${p.done ? 'done' : ''}"><i class="chip" style="background:${p.color}"></i><span class="job-name">${label[p.id]}</span><span class="job-val">${value[p.id]}</span><span class="job-check">${p.done ? i('tick') : i('next')}</span></button></li>`).join('')}
-  </ul>
+  ${cleared.length ? `<section class="block"><h2>Completed</h2><ul class="quests">${cleared.map(q => questCard(q, info[q.id], fresh)).join('')}</ul></section>` : ''}
   <section class="block"><div class="week">${week}</div></section>
-  ${advice.length ? `<section class="block"><h2>Next up</h2><ul class="advice">${advice.map(adviceRow).join('')}</ul></section>` : ''}
-  ${state.active ? '' : plan && !trained.length ? `<div class="stick"><button class="btn solid" data-a="startDay" data-id="${plan.id}">Start ${esc(plan.name)}</button></div>` : ''}`;
+  ${advice.length ? `<section class="block"><h2>Next up</h2><ul class="advice">${advice.map(adviceRow).join('')}</ul></section>` : ''}`;
 }
 
 /* ---------- Train ---------- */
@@ -184,7 +209,7 @@ function viewPlan() {
       return `<li><button data-a="openSheet" data-type="lift" data-name="${esc(e.name)}"><span class="pl-name">${esc(e.name)}</span><span class="pl-sub">${e.sets} × ${e.lo} to ${e.hi}${e.unit === 'sec' ? ' s' : ''}</span><span class="pl-next">${n.w ? `${esc(n.headline)}: ${round(n.w, 2)} kg` : esc(n.headline)}</span></button></li>`;
     }).join('')}</ol>
     <button class="btn solid wide" data-a="startDay" data-id="${day.id}">${inDeload() ? 'Start lighter session' : 'Start workout'}</button>
-  ` : `<div class="session-head"><div><h2>Rest day</h2><p class="dim">8 to 10k steps, eat normally, recover.</p></div></div>
+  ` : `<div class="session-head"><div><h2>Rest day</h2><p class="dim">Eat normally, recover.</p></div></div>
        <button class="btn line wide" data-a="openSheet" data-type="schedule">Put a workout on this day</button>`;
   const others = p.days.filter(d => d.id !== dayId);
   const recent = state.workouts.slice(-8).reverse();
@@ -265,7 +290,7 @@ function viewFood() {
   const k = ui.foodDate, t = dayTotals(k), tg = targetsOn(k);
   const meals = peekDay(k).meals || {};
   const left = tg.kcal - t.kcal;
-  const bar = (label, got, of, color) => `<div class="mac"><div class="mac-top"><span>${label}</span><span>${Math.round(got)}<em> of ${of} g</em></span></div><div class="mac-track"><i style="width:${clamp(got / of * 100, 0, 100)}%;background:${color}"></i></div></div>`;
+  const bar = (label, got, of, color) => `<div class="mac"><div class="mac-top"><span>${label}</span><span>[${Math.round(got)}<em> / ${of} g</em>]</span></div><div class="mac-track"><i style="width:${clamp(got / of * 100, 0, 100)}%;background:${color}"></i></div></div>`;
   const yesterday = addDays(k, -1);
   const yMeals = peekDay(yesterday).meals || {};
   return `
@@ -277,7 +302,7 @@ function viewFood() {
   <section class="hero left">
     <p class="big-num"><b data-count="${Math.abs(Math.round(left))}">${fmt(Math.abs(left))}</b></p>
     <p class="dim">${left >= 0 ? 'kcal left' : 'kcal over'} of ${fmt(tg.kcal)}</p>
-    ${bar('Protein', t.p, tg.protein, 'var(--blue)')}${bar('Carbs', t.c, tg.carbs, 'var(--yellow)')}${bar('Fat', t.f, tg.fat, 'var(--red)')}
+    ${bar('Protein', t.p, tg.protein, 'var(--protein)')}${bar('Carbs', t.c, tg.carbs, 'var(--carbs)')}${bar('Fat', t.f, tg.fat, 'var(--fat)')}
   </section>
   ${SLOTS.map(([slot, name]) => {
     const list = meals[slot] || [];
@@ -330,25 +355,23 @@ function viewProgress() {
     <p class="legend"><i class="lg-line"></i> Trend <i class="lg-dot"></i> Scale readings</p>
   </section>
   ${coachPanel(c)}
-  <section class="block"><h2>This week's sets by muscle</h2>
+  <section class="block card"><h2>This week's sets by muscle</h2>
     <p class="dim sm">Direct sets count as 1, indirect as 0.5. Aim for ${goal.lo} to ${goal.hi}. ${refLinks(['schoenfeld17', 'pelland26'])}</p>
     <ul class="volume">${MUSCLE_ORDER.map(m => {
       const v = vol[m] || 0, pctV = clamp(v / goal.hi * 100, 0, 100), lo = goal.lo / goal.hi * 100;
       return `<li><span>${MUSCLE_NAMES[m]}${PRIORITY_MUSCLES.includes(m) ? '<sup>*</sup>' : ''}</span><div class="vol-track"><i class="vol-zone" style="left:${lo}%"></i><i class="vol-fill${v >= goal.lo ? ' met' : ''}" style="width:${pctV}%"></i></div><b>${round(v, 1)}</b></li>`;
     }).join('')}</ul><p class="dim sm">* Priority in your plan</p></section>
-  <section class="block"><h2>Strength</h2>
+  <section class="block card"><h2>Strength</h2>
     ${liftNames.length ? `<select class="pick" data-f="liftChart" aria-label="Choose an exercise">${liftNames.slice().sort().map(n => `<option ${n === lift ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
     ${lineChart({ id: 'lift', points: liftSeries, unit: libEntry(lift)?.unit === 'sec' ? 's' : 'kg', height: 150, decimals: 1 })}<p class="dim sm">Estimated one-rep max from your best set, using the Epley formula. Treat it as a trend, not a true max.</p>` : '<p class="empty">Finish a workout to see strength trends.</p>'}
   </section>
-  <section class="block"><h2>Calories, 3 weeks</h2>
-    ${barChart({ id: 'kcal', days: days14, get: d => dayTotals(d).kcal, target: state.targets.kcal, color: 'var(--chalk)', unit: 'kcal' })}</section>
-  <section class="block"><h2>Protein, 3 weeks</h2>
-    ${barChart({ id: 'protein', days: days14, get: d => dayTotals(d).p, target: state.targets.protein, color: 'var(--blue)', unit: 'g' })}</section>
-  <section class="block"><h2>Steps, 3 weeks</h2>
-    ${barChart({ id: 'steps', days: days14, get: d => peekDay(d).steps || 0, target: state.targets.steps, color: 'var(--green)', unit: 'steps' })}</section>
-  <section class="block"><h2>Consistency</h2>
-    ${heatmap()}<p class="legend"><i class="h-swatch h-full"></i> Full bar <i class="h-swatch h-train"></i> Trained <i class="h-swatch h-log"></i> Logged</p></section>
-  ${waist.length ? `<section class="block"><h2>Waist</h2>${lineChart({ id: 'waist', points: waist, unit: 'cm', height: 130 })}</section>` : ''}`;
+  <section class="block card"><h2>Calories, 3 weeks</h2>
+    ${barChart({ id: 'kcal', days: days14, get: d => dayTotals(d).kcal, target: state.targets.kcal, color: 'var(--accent)', unit: 'kcal' })}</section>
+  <section class="block card"><h2>Protein, 3 weeks</h2>
+    ${barChart({ id: 'protein', days: days14, get: d => dayTotals(d).p, target: state.targets.protein, color: 'var(--protein)', unit: 'g' })}</section>
+  <section class="block card"><h2>Consistency</h2>
+    ${heatmap()}<p class="legend"><i class="h-swatch h-full"></i> All quests <i class="h-swatch h-train"></i> Trained <i class="h-swatch h-log"></i> Logged</p></section>
+  ${waist.length ? `<section class="block card"><h2>Waist</h2>${lineChart({ id: 'waist', points: waist, unit: 'cm', height: 130 })}</section>` : ''}`;
 }
 function coachPanel(c) {
   const goal = state.goal;
@@ -356,8 +379,8 @@ function coachPanel(c) {
     const pw = clamp(c.weighIns / c.needWeighIns, 0, 1), ps = clamp(c.sessions / c.needSessions, 0, 1);
     return `<section class="block coach"><h2>Calorie coach</h2>
       <h3>${esc(c.title)}</h3><p>${esc(c.body)}</p>
-      <div class="unlock"><span>Weigh-ins</span><div class="mac-track"><i style="width:${pw * 100}%;background:var(--chalk)"></i></div><b>${Math.min(c.weighIns, c.needWeighIns)} of ${c.needWeighIns}</b></div>
-      <div class="unlock"><span>Workouts</span><div class="mac-track"><i style="width:${ps * 100}%;background:var(--red)"></i></div><b>${Math.min(c.sessions, c.needSessions)} of ${c.needSessions}</b></div>
+      <div class="unlock"><span>Weigh-ins</span><div class="mac-track"><i style="width:${pw * 100}%;background:var(--accent)"></i></div><b>${Math.min(c.weighIns, c.needWeighIns)} of ${c.needWeighIns}</b></div>
+      <div class="unlock"><span>Workouts</span><div class="mac-track"><i style="width:${ps * 100}%;background:var(--accent)"></i></div><b>${Math.min(c.sessions, c.needSessions)} of ${c.needSessions}</b></div>
       ${c.formula ? `<p class="dim sm">Formula estimate of what you burn: about ${fmt(c.formula)} kcal a day. Your own data will replace this guess.</p>` : ''}
       <div class="adv-foot"><button class="link strong" data-a="openSheet" data-type="goal">Goal: ${esc(GOALS[goal.mode].label)}</button><button class="link" data-a="openSheet" data-type="method">How this works</button></div></section>`;
   }
@@ -383,9 +406,9 @@ function viewYou() {
   const earned = MILESTONES.filter(m => m[2](s));
   const backup = state.lastBackup ? `Last saved ${niceDate(state.lastBackup)}` : 'Not saved yet';
   return `
-  <header class="top"><div><h1>${esc(p.name || 'You')}</h1><p class="dim">Level ${s.level}, ${fmt(s.lifetime)} kg loaded in total</p></div></header>
+  <header class="top"><div><h1>${esc(p.name || 'You')}</h1><p class="dim">Level ${s.level}, ${fmt(s.xp)} XP in total</p></div></header>
   <div class="level-track"><i style="width:${s.into / s.need * 100}%"></i></div>
-  <dl class="tally"><div><dd>${s.workouts}</dd><dt>Workouts</dt></div><div><dd>${s.prs}</dd><dt>New bests</dt></div><div><dd>${(s.volume / 1000).toFixed(1)}</dd><dt>Tonnes lifted</dt></div><div><dd>${s.fullBars}</dd><dt>Full bars</dt></div></dl>
+  <dl class="tally"><div><dd>${s.workouts}</dd><dt>Workouts</dt></div><div><dd>${s.prs}</dd><dt>New bests</dt></div><div><dd>${(s.volume / 1000).toFixed(1)}</dd><dt>Tonnes lifted</dt></div><div><dd>${s.clearedDays}</dd><dt>Days cleared</dt></div></dl>
   <section class="block"><h2>Plan</h2><ul class="rows">
     <li><button class="row" data-a="openSheet" data-type="targets"><span>Daily targets</span><span class="dim">${fmt(t.kcal)} kcal, ${t.protein} g protein</span></button></li>
     <li><button class="row" data-a="openSheet" data-type="goal"><span>Goal</span><span class="dim">${esc(GOALS[state.goal.mode].label)}</span></button></li>
@@ -405,7 +428,7 @@ function viewYou() {
   <section class="block"><h2>Food database</h2>
     <p class="dim sm">${db.total ? `${fmt(db.loaded)} of ${fmt(db.total)} foods ready on this phone${db.done ? ', and they work offline.' : db.partial ? '. The rest will download when you have signal.' : '.'}` : 'Loads when you first search.'}</p>
     <ul class="rows"><li><button class="row" data-a="openSheet" data-type="usda"><span>USDA online search key</span><span class="dim">${state.settings.usdaKey ? 'Added' : 'Optional'}</span></button></li></ul></section>
-  <section class="block"><h2>Milestones</h2>
+  <section class="block card"><h2>Milestones</h2>
     <ul class="miles">${MILESTONES.map(m => `<li class="${m[2](s) ? 'got' : ''}"><b>${esc(m[0])}</b><span>${esc(m[1])}</span></li>`).join('')}</ul>
     <p class="dim sm">${earned.length} of ${MILESTONES.length} reached.</p></section>
   <section class="block"><ul class="rows"><li><button class="row" data-a="openSheet" data-type="method"><span>The science behind the numbers</span></button></li>
@@ -414,9 +437,8 @@ function viewYou() {
 
 function viewWelcome() {
   return `<section class="welcome">
-    ${barbellSVG(PLATES.map(p => ({ ...p, done: true })), PLATES.map(p => p.id))}
     <h1>Rep Quest</h1>
-    <p>Load the bar every day: train, hit protein and calories, walk, weigh in. Your numbers steer the plan.</p>
+    <p>Clear your quests every day: train, hit protein and calories, weigh in. Your numbers steer the plan.</p>
     <form id="welcome-form" class="form">
       <label>First name<input id="w-name" autocomplete="given-name"></label>
       <div class="two"><label>Weight, kg<input id="w-weight" inputmode="decimal" required></label><label>Height, cm<input id="w-height" inputmode="numeric" value="183"></label></div>

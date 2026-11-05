@@ -41,7 +41,7 @@ const GOALS = {
 };
 const ACTIVITY = [
   { id: 'light', pal: 1.4, label: 'Mostly sitting, little exercise' },
-  { id: 'moderate', pal: 1.6, label: 'Desk day, lifting 3 to 5 times, 8 to 10k steps' },
+  { id: 'moderate', pal: 1.6, label: 'Desk day, lifting 3 to 5 times' },
   { id: 'high', pal: 1.85, label: 'Active job or daily hard training' },
 ];
 
@@ -318,18 +318,17 @@ function weeklyVolume(workouts, weekFrom, lookup) {
   return out;
 }
 
-/* ---------- Game layer: a bar loaded with plates ---------- */
-const PLATES = [
-  { id: 'train', kg: 25, color: 'var(--red)', h: 76 },
-  { id: 'protein', kg: 20, color: 'var(--blue)', h: 76 },
-  { id: 'calories', kg: 15, color: 'var(--yellow)', h: 64 },
-  { id: 'steps', kg: 10, color: 'var(--green)', h: 52 },
-  { id: 'weigh', kg: 5, color: 'var(--chalk)', h: 40 },
+/* ---------- Game layer: daily quests earn XP ---------- */
+const QUESTS = [
+  { id: 'train', xp: 50 },
+  { id: 'protein', xp: 40 },
+  { id: 'calories', xp: 30 },
+  { id: 'weigh', xp: 10 },
 ];
-const BAR_KG = 20;
-const barWeight = plates => BAR_KG + 2 * sum(plates.map(p => p.kg));
-function levelFor(lifetimeKg) {
-  let level = 1, need = 1500, left = lifetimeKg;
+const SHOW_UP_XP = 20; // any logged day earns this
+const dayXp = quests => SHOW_UP_XP + 2 * sum(quests.map(q => q.xp));
+function levelFor(totalXp) {
+  let level = 1, need = 1500, left = totalXp;
   while (left >= need) { left -= need; level++; need = 1500 + (level - 1) * 400; }
   return { level, into: left, need };
 }
