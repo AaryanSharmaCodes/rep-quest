@@ -382,6 +382,13 @@ const A = {
   },
   clearWeight(d) { delete getDay(d.k).weight; closeSheet(); },
   logDay(d) { ui.sheet.date = addDays(ui.sheet.date || today(), Number(d.n)); render(); },
+  async checkUpdate() {
+    if (!swReg) { toast('Updates are off here'); return; }
+    try {
+      await swReg.update();
+      toast(swReg.installing || swReg.waiting ? 'Update found, installing' : `You're on the latest version`);
+    } catch (e) { toast('No connection, try again with signal'); }
+  },
   saveLog(d) {
     const day = getDay(d.k);
     [['sleep', 'l-sleep'], ['water', 'l-water'], ['cardio', 'l-cardio'], ['waist', 'l-waist']].forEach(([key, id]) => {
@@ -906,9 +913,30 @@ document.addEventListener('visibilitychange', () => {
     if (ui.openedOn !== today()) { ui.openedOn = today(); ui.foodDate = today(); ui.planDay = new Date().getDay(); }
     if (state.active) requestWake();
     if (!document.activeElement || document.activeElement === document.body) render();
+    swReg?.update().catch(() => {});
+    applyUpdate();
   }
 });
 window.addEventListener('pagehide', flushSave);
+
+/* ---------- App updates ---------- */
+let swReg = null, updateReady = false;
+// A new release has taken over. Reload now unless that would interrupt something.
+function applyUpdate() {
+  if (!updateReady || state.active || ui.sheet || ui.rest || document.activeElement?.matches('input,textarea,select')) return;
+  updateReady = false;
+  flushSave();
+  location.reload();
+}
+function startUpdates() {
+  const hadWorker = !!navigator.serviceWorker.controller; // false on a first install, which needs no reload
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadWorker) return;
+    updateReady = true;
+    applyUpdate();
+  });
+  navigator.serviceWorker.register('sw.js').then(reg => { swReg = reg; return reg.update(); }).catch(() => {});
+}
 
 /* ---------- Start ---------- */
 async function boot() {
@@ -930,7 +958,7 @@ async function boot() {
   }
   // Skipped on localhost unless asked for, so edits show up without a stale copy in the way.
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.search.includes('sw'))) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    startUpdates();
   }
 }
 boot();

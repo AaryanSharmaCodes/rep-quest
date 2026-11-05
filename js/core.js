@@ -56,6 +56,7 @@ function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(writeS
 function flushSave() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; writeSave(); } }
 
 /* ---------- State ---------- */
+const APP_VERSION = 4; // matches CACHE in sw.js
 function defaultState() {
   return {
     v: 2,

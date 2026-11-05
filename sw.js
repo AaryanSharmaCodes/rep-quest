@@ -1,12 +1,15 @@
 // Keeps the app opening offline (gyms have bad signal).
-// The app itself: serve the saved copy instantly and refresh it in the background.
+// The app itself: each release is one complete saved copy, so old and new files never mix.
+// CHANGE THIS NAME ON EVERY RELEASE, and APP_VERSION in js/core.js with it: a phone only updates when this file changes.
 // The food files are large and only change with a rebuild, so they're fetched once and kept.
-const CACHE = 'rep-quest-v3';
+const CACHE = 'rep-quest-v4';
 const DATA_CACHE = 'rep-quest-data-v1';
 const SHELL = ['./', 'index.html', 'styles.css', 'js/util.js', 'js/science.js', 'js/library.js', 'js/core.js', 'js/foods.js', 'js/charts.js', 'js/views.js', 'js/sheets.js', 'js/app.js', 'food-worker.js', 'manifest.webmanifest', 'fonts/cinzel.woff2', 'fonts/cinzel-deco-700.woff2', 'fonts/instrument-sans.woff2', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  // 'reload' skips the browser's HTTP cache. GitHub Pages lets it reuse files for 10 minutes,
+  // and without this a new release can get saved with the old files inside.
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', e => {
@@ -47,16 +50,5 @@ self.addEventListener('fetch', e => {
     }));
     return;
   }
-  e.respondWith(caches.open(CACHE).then(async cache => {
-    const saved = await cache.match(e.request, { ignoreSearch: true });
-    const fresh = fetch(e.request).then(res => {
-      if (res.ok) cache.put(e.request, res.clone());
-      return res;
-    });
-    if (saved) {
-      fresh.catch(() => {});
-      return saved;
-    }
-    return fresh;
-  }));
+  e.respondWith(caches.open(CACHE).then(async cache => (await cache.match(e.request, { ignoreSearch: true })) || fetch(e.request)));
 });

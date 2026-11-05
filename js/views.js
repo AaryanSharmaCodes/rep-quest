@@ -432,7 +432,8 @@ function viewYou() {
     <ul class="miles">${MILESTONES.map(m => `<li class="${m[2](s) ? 'got' : ''}"><b>${esc(m[0])}</b><span>${esc(m[1])}</span></li>`).join('')}</ul>
     <p class="dim sm">${earned.length} of ${MILESTONES.length} reached.</p></section>
   <section class="block"><ul class="rows"><li><button class="row" data-a="openSheet" data-type="method"><span>The science behind the numbers</span></button></li>
-    <li><button class="row" data-a="openSheet" data-type="about"><span>Data sources and credits</span></button></li></ul></section>`;
+    <li><button class="row" data-a="openSheet" data-type="about"><span>Data sources and credits</span></button></li>
+    <li><button class="row" data-a="checkUpdate"><span>Check for updates</span><span class="dim">Version ${APP_VERSION}</span></button></li></ul></section>`;
 }
 
 function viewWelcome() {
