@@ -1,13 +1,13 @@
 'use strict';
 // The gym exercises the app knows well: which muscles each works, sensible weight jumps, and what can replace it.
 // A pattern groups exercises that do the same job, which is what makes one-tap swaps possible.
-// Rest: compound 150 s and isolation 90 s (your plan; Singer 2024 found no clear extra benefit past 90 s).
+// Rest: compound 150 s and isolation 90 s (Singer 2024 found no clear extra benefit past 90 s).
 const MUSCLE_NAMES = {
   chest: 'Chest', lats: 'Lats', 'upper back': 'Upper back', 'side delts': 'Side delts', 'front delts': 'Front delts', 'rear delts': 'Rear delts',
   biceps: 'Biceps', triceps: 'Triceps', forearms: 'Forearms', quads: 'Quads', hamstrings: 'Hamstrings', glutes: 'Glutes', calves: 'Calves', abs: 'Abs', 'lower back': 'Lower back',
 };
 const MUSCLE_ORDER = ['chest', 'lats', 'upper back', 'side delts', 'rear delts', 'front delts', 'biceps', 'triceps', 'quads', 'hamstrings', 'glutes', 'calves', 'abs'];
-// Your plan's priorities: side and rear delts, upper chest, lats and upper back, arms.
+// Extra attention for an aesthetic physique: side and rear delts, upper chest, lats and upper back, arms.
 const PRIORITY_MUSCLES = ['side delts', 'rear delts', 'chest', 'lats', 'upper back', 'biceps', 'triceps'];
 const INC = { barbell: 2.5, dumbbell: 2, kettlebell: 4, cable: 2.5, machine: 5, bodyweight: 0, 'smith machine': 2.5, 'ez bar': 2.5, band: 0 };
 
@@ -99,7 +99,7 @@ const LIBRARY = [
   // Hamstrings and glutes
   X('Seated leg curl', 'leg curl', 'hamstrings', [], 'machine', 'isolation', { lo: 10, hi: 15, inc: 2.5 }),
   X('Lying leg curl', 'leg curl', 'hamstrings', [], 'machine', 'isolation', { lo: 10, hi: 15, inc: 2.5 }),
-  X('Romanian deadlift', 'hinge', 'hamstrings', ['glutes', 'lower back'], 'barbell', 'compound', { cue: 'Push hips back. Your plan avoids deadlifts, so try this only if your back feels good.' }),
+  X('Romanian deadlift', 'hinge', 'hamstrings', ['glutes', 'lower back'], 'barbell', 'compound', { cue: 'Push hips back. Try this only if your back feels good.' }),
   X('Dumbbell Romanian deadlift', 'hinge', 'hamstrings', ['glutes', 'lower back'], 'dumbbell', 'compound'),
   X('45-degree back extension', 'hinge', 'hamstrings', ['glutes', 'lower back'], 'bodyweight', 'compound', { lo: 10, hi: 20 }),
   X('Hip thrust machine', 'glute', 'glutes', ['hamstrings'], 'machine', 'compound', { lo: 10, hi: 12 }),
@@ -250,10 +250,10 @@ function planRow(name, sets, lo, hi) {
 }
 const D = (name, rows) => ({ id: uid(), name, exercises: rows.map(r => planRow(...r)) });
 
-// Pre-built programs. The first two are the plans from your ChatGPT chat, word for word.
+// Pre-built programs. New people pick one during setup, and anyone can switch later.
 const PROGRAMS = [
   {
-    key: 'final', name: 'Your final 5-day plan', source: 'From your ChatGPT chat', says: 'Upper, lower, push, pull, then legs and arms. Extra attention on shoulders and upper chest.',
+    key: 'final', name: "Founder's plan", source: '5 days a week', says: 'Upper, lower, push, pull, then legs and arms. Extra attention on shoulders and upper chest.',
     make() {
       const mon = D('Upper body', [['Machine chest press', 3, 6, 10], ['Lat pulldown', 3, 8, 12], ['Chest-supported row', 3, 8, 12], ['Incline dumbbell press', 2, 8, 12], ['Cable lateral raises', 3, 12, 20], ['EZ-bar biceps curls', 2, 10, 12], ['Rope triceps pushdown', 2, 10, 15]]);
       const tue = D('Lower body', [['Leg press', 3, 8, 12], ['Seated leg curl', 3, 10, 15], ['Leg extension', 3, 10, 15], ['Bulgarian split squat', 2, 8, 12], ['Standing calf raises', 3, 12, 15], ['Cable crunches', 3, 12, 15]]);
@@ -264,18 +264,7 @@ const PROGRAMS = [
     },
   },
   {
-    key: 'first', name: 'Your first 5-day plan', source: 'From your ChatGPT chat', says: 'The earlier version from the same chat, with machine shoulder pressing and more leg work on Saturday.',
-    make() {
-      const mon = D('Upper A', [['Machine chest press', 3, 8, 12], ['Lat pulldown', 3, 8, 12], ['Seated cable row', 3, 10, 12], ['Machine shoulder press', 2, 8, 12], ['Cable lateral raises', 3, 12, 20], ['Triceps pushdowns', 2, 10, 15], ['Dumbbell curls', 2, 10, 15]]);
-      const tue = D('Lower A', [['Leg press', 3, 8, 12], ['Seated leg curl', 3, 10, 15], ['Leg extension', 3, 10, 15], ['Bulgarian split squat', 2, 8, 12], ['Standing calf raises', 3, 12, 15], ['Cable crunches', 3, 12, 15]]);
-      const thu = D('Push', [['Incline machine chest press', 3, 8, 12], ['Pec deck', 3, 10, 15], ['Seated machine shoulder press', 2, 8, 12], ['Cable lateral raises', 3, 12, 20], ['Overhead triceps extension', 2, 10, 15], ['Rope pushdown', 2, 10, 15]]);
-      const fri = D('Pull', [['Lat pulldown', 3, 8, 12], ['Chest-supported row', 3, 8, 12], ['Single-arm cable row', 2, 10, 12], ['Reverse pec deck', 3, 12, 20], ['Dumbbell hammer curls', 3, 10, 12], ['Preacher curls', 2, 10, 15]]);
-      const sat = D('Legs and abs', [['Hack squat or leg press', 3, 8, 12], ['Lying leg curl', 3, 10, 15], ['Leg extension', 2, 12, 15], ['Hip thrust machine', 3, 10, 12], ['Seated calf raises', 3, 12, 15], ['Hanging knee raises', 3, 10, 15], ['Cable crunches', 2, 12, 15]]);
-      return { days: [mon, tue, thu, fri, sat], schedule: { 1: mon.id, 2: tue.id, 4: thu.id, 5: fri.id, 6: sat.id } };
-    },
-  },
-  {
-    key: 'ul4', name: 'Upper / lower, 4 days', source: 'Extra option', says: 'Your chat noted four good sessions beat five bad ones. Use this when recovery is short.',
+    key: 'ul4', name: 'Upper / lower, 4 days', source: '4 days a week', says: 'Four good sessions beat five rushed ones. A good fit when recovery or time is short.',
     make() {
       const a = D('Upper 1', [['Machine chest press', 3, 6, 10], ['Lat pulldown', 3, 8, 12], ['Chest-supported row', 3, 8, 12], ['Machine shoulder press', 2, 8, 12], ['Cable lateral raises', 4, 12, 20], ['EZ-bar biceps curls', 2, 10, 12], ['Rope triceps pushdown', 2, 10, 15]]);
       const b = D('Lower 1', [['Leg press', 3, 8, 12], ['Seated leg curl', 3, 10, 15], ['Leg extension', 2, 10, 15], ['Standing calf raises', 3, 12, 15], ['Cable crunches', 3, 12, 15]]);
@@ -285,7 +274,7 @@ const PROGRAMS = [
     },
   },
   {
-    key: 'ppl6', name: 'Push, pull, legs, 6 days', source: 'Extra option', says: 'Each muscle twice a week with more total sets. Only worth it if sleep and recovery are solid.',
+    key: 'ppl6', name: 'Push, pull, legs, 6 days', source: '6 days a week', says: 'Each muscle twice a week with more total sets. Only worth it if sleep and recovery are solid.',
     make() {
       const push = n => D(`Push ${n}`, [[n === 1 ? 'Incline machine chest press' : 'Flat machine chest press', 3, 8, 12], [n === 1 ? 'Machine chest press' : 'Incline dumbbell press', 3, 8, 12], ['Machine shoulder press', 2, 8, 12], ['Cable lateral raises', 4, 12, 20], ['Rope pushdown', 3, 10, 15]]);
       const pull = n => D(`Pull ${n}`, [[n === 1 ? 'Lat pulldown' : 'Neutral-grip lat pulldown', 3, 8, 12], [n === 1 ? 'Chest-supported row' : 'Seated cable row', 3, 8, 12], ['Single-arm cable row', 2, 10, 12], ['Reverse pec deck', 3, 12, 20], ['Preacher curls', 3, 10, 12]]);
@@ -295,7 +284,7 @@ const PROGRAMS = [
     },
   },
   {
-    key: 'fb3', name: 'Full body, 3 days', source: 'Extra option', says: 'For exam weeks or travel. Every muscle three times a week in fewer sessions.',
+    key: 'fb3', name: 'Full body, 3 days', source: '3 days a week', says: 'For busy weeks or travel. Every muscle three times a week in fewer sessions.',
     make() {
       const a = D('Full body A', [['Machine chest press', 3, 8, 12], ['Lat pulldown', 3, 8, 12], ['Leg press', 3, 8, 12], ['Cable lateral raises', 3, 12, 20], ['Seated leg curl', 2, 10, 15], ['Rope pushdown', 2, 10, 15]]);
       const b = D('Full body B', [['Incline dumbbell press', 3, 8, 12], ['Chest-supported row', 3, 8, 12], ['Hack squat', 3, 8, 12], ['Reverse pec deck', 3, 12, 20], ['Dumbbell curls', 2, 10, 15], ['Cable crunches', 3, 12, 15]]);

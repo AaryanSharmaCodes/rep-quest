@@ -4,7 +4,34 @@
 const Motion = (() => {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   const on = () => !reduced.matches && state.settings?.animations !== false;
-  const SPRING = 'cubic-bezier(.2, 1.4, .4, 1)', OUT = 'cubic-bezier(.2, .8, .3, 1)';
+  // Real spring physics (from Motion), run by the browser's own animation engine so a busy page can't stutter them.
+  const canSpring = !!window.MotionLib && CSS.supports('transition-timing-function', 'linear(0, 1)');
+  const springs = {};
+  function curve(bounce, dur) {
+    const key = `${bounce}/${dur}`;
+    if (springs[key]) return springs[key];
+    let out = { t: dur * 1000 * 1.4, e: bounce > 0.1 ? 'cubic-bezier(.2, 1.3, .4, 1)' : 'cubic-bezier(.2, .8, .3, 1)' };
+    if (canSpring) {
+      try {
+        const hit = String(MotionLib.spring(dur, bounce)).match(/^(\d+(?:\.\d+)?)ms (linear\(.+\))$/);
+        if (hit) out = { t: Number(hit[1]), e: hit[2] };
+      } catch (err) { /* the fallback curve above still animates */ }
+    }
+    springs[key] = out;
+    return out;
+  }
+  const sp = (el, frames, { bounce = 0.2, dur = 0.35, delay = 0, fill = 'none' } = {}) => {
+    const c = curve(bounce, dur);
+    return el.animate(frames, { duration: c.t, easing: c.e, delay, fill });
+  };
+  const OUT = curve(0, 0.4).e;
+  // The same curves for the stylesheet.
+  const root = document.documentElement.style;
+  [['soft', 0.12, 0.42], ['bouncy', 0.34, 0.42], ['press', 0.45, 0.32]].forEach(([name, bounce, dur]) => {
+    const c = curve(bounce, dur);
+    root.setProperty(`--${name}-e`, c.e);
+    root.setProperty(`--${name}-t`, `${Math.round(c.t)}ms`);
+  });
   const theme = () => THEMES.find(t => t.id === document.documentElement.dataset.theme) || THEMES[0];
   const fxLayer = () => document.getElementById('fx');
   const queue = [];
@@ -30,7 +57,7 @@ const Motion = (() => {
 
   /* ---------- Small pieces ---------- */
   function pop(el, big = 1.18) {
-    if (on() && el) el.animate([{ transform: 'scale(1)' }, { transform: `scale(${big})` }, { transform: 'scale(1)' }], { duration: 260, easing: SPRING });
+    if (on() && el) sp(el, [{ transform: `scale(${1 + (big - 1) * 1.6})` }, { transform: 'scale(1)' }], { bounce: 0.5, dur: 0.3 });
   }
   function piece(cls, x, y, text = '') {
     const el = document.createElement('span');
@@ -88,6 +115,118 @@ const Motion = (() => {
     });
   }
 
+  /* ---------- Fluid updates ---------- */
+  // Changes only what actually changed, so focus, scroll and running animations survive, then glides anything that moved.
+  const nodeKey = n => (n.getAttribute && n.getAttribute('data-key')) || n.id;
+  function flipRects(host) {
+    const out = new Map();
+    host.querySelectorAll('[data-flip]').forEach(el => {
+      const r = el.getBoundingClientRect();
+      if (r.bottom > -200 && r.top < innerHeight + 200) out.set(el.getAttribute('data-key'), r);
+    });
+    return out;
+  }
+  function flipPlay(host, before) {
+    host.querySelectorAll('[data-flip]').forEach(el => {
+      const r = el.getBoundingClientRect(), old = before.get(el.getAttribute('data-key'));
+      if (r.bottom < 0 || r.top > innerHeight) return;
+      if (!old) {
+        if (before.size) sp(el, [{ opacity: 0, transform: 'scale(.96)' }, { opacity: 1, transform: 'none' }], { bounce: 0.2, dur: 0.34 });
+        return;
+      }
+      const dx = old.left - r.left, dy = old.top - r.top;
+      if (Math.abs(dx) + Math.abs(dy) > 1) sp(el, [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { bounce: 0.16, dur: 0.42 });
+    });
+  }
+  function morph(host, html) {
+    const before = on() ? flipRects(host) : null;
+    morphdom(host, `<div>${html}</div>`, {
+      childrenOnly: true,
+      getNodeKey: nodeKey,
+      onBeforeElUpdated(from, to) {
+        if (from === document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(from.tagName)) return false;
+        // Sliding selectors keep their position, so the next change slides from it.
+        if (from.classList.contains('seg') || from.classList.contains('dstrip')) {
+          to.style.cssText = from.style.cssText;
+          if (from.classList.contains('ready')) to.classList.add('ready');
+        }
+        return !from.isEqualNode(to);
+      },
+      onBeforeNodeDiscarded: n => !(n.classList && n.classList.contains('fx-sweep')),
+    });
+    syncThumbs(host);
+    if (before) flipPlay(host, before);
+  }
+  // A pill that slides between options, like iOS segmented controls.
+  function syncThumbs(host) {
+    host.querySelectorAll('.seg, .dstrip').forEach(box => {
+      const onEl = box.querySelector(':scope > .on');
+      if (!onEl) { box.style.setProperty('--tw', '0px'); return; }
+      box.style.setProperty('--tx', `${onEl.offsetLeft}px`);
+      box.style.setProperty('--tw', `${onEl.offsetWidth}px`);
+      if (!box.classList.contains('ready')) requestAnimationFrame(() => box.classList.add('ready'));
+    });
+  }
+
+  /* ---------- Title bar that appears as the big title scrolls away ---------- */
+  let titleWatch = null, watched = null;
+  function watchTitle(app) {
+    const bar = document.getElementById('navbar');
+    const title = app.querySelector('.top h1, .datebar h1');
+    if (!title) { bar.classList.remove('show'); titleWatch?.disconnect(); watched = null; return; }
+    bar.firstElementChild.textContent = title.textContent;
+    if (title === watched) return;
+    titleWatch?.disconnect();
+    watched = title;
+    titleWatch = new IntersectionObserver(([e]) => bar.classList.toggle('show', !e.isIntersecting), { rootMargin: '-44px 0px 0px 0px' });
+    titleWatch.observe(title);
+  }
+
+  /* ---------- Drag a sheet down to dismiss it ---------- */
+  function dragSheets() {
+    const host = document.getElementById('sheet');
+    let panel = null, startY = 0, lastY = 0, lastT = 0, speed = 0, dragging = false;
+    host.addEventListener('touchstart', e => {
+      panel = e.target.closest('.panel');
+      if (!panel || e.touches.length > 1 || e.target.closest('input, textarea, select, .chart, .opts, .scrollx')) { panel = null; return; }
+      startY = lastY = e.touches[0].clientY;
+      lastT = e.timeStamp;
+      speed = 0;
+      dragging = false;
+    }, { passive: true });
+    host.addEventListener('touchmove', e => {
+      if (!panel) return;
+      const y = e.touches[0].clientY, dy = y - startY;
+      if (!dragging) {
+        if (dy < -6 || (dy > 6 && panel.scrollTop > 0)) { panel = null; return; }
+        if (dy > 6) dragging = true; else return;
+      }
+      e.preventDefault();
+      speed = (y - lastY) / Math.max(e.timeStamp - lastT, 1);
+      lastY = y;
+      lastT = e.timeStamp;
+      panel.style.transform = `translateY(${Math.max(dy, 0)}px)`;
+      const scrim = host.querySelector('.scrim');
+      if (scrim) scrim.style.opacity = String(clamp(1 - dy / panel.offsetHeight, 0, 1));
+    }, { passive: false });
+    const end = e => {
+      if (!panel || !dragging) { panel = null; return; }
+      const dy = lastY - startY, p = panel;
+      panel = null;
+      dragging = false;
+      // A flick only counts if the finger was still moving as it lifted.
+      const flicked = speed > 0.55 && e.timeStamp - lastT < 80;
+      if (dy > Math.min(140, p.offsetHeight * 0.3) || flicked) { closeAll(); return; }
+      p.style.transform = '';
+      const scrim = host.querySelector('.scrim');
+      if (scrim) scrim.style.opacity = '';
+      if (on()) sp(p, [{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { bounce: 0.22, dur: 0.38 });
+    };
+    host.addEventListener('touchend', end, { passive: true });
+    host.addEventListener('touchcancel', end, { passive: true });
+  }
+  document.addEventListener('DOMContentLoaded', dragSheets);
+
   /* ---------- Page entrance ---------- */
   const LISTS = '.quests, .plan-list, .rows, .advice';
   function enter(app) {
@@ -99,7 +238,7 @@ const Motion = (() => {
   }
 
   return {
-    pop, burst,
+    pop, burst, morph,
     refresh() {
       document.documentElement.dataset.motion = on() ? 'on' : 'off';
     },
@@ -111,7 +250,10 @@ const Motion = (() => {
         app.querySelectorAll('[data-k][data-pct]').forEach(el => { ui.bars[el.dataset.k] = Number(el.dataset.pct); });
         app.querySelectorAll('[data-count][data-k]').forEach(el => { ui.nums[el.dataset.k] = Number(el.dataset.count); });
       }
+      syncThumbs(app);
+      watchTitle(app);
       const panel = document.querySelector('#sheet .panel');
+      if (panel) syncThumbs(panel);
       if (panel && live) { syncBars(panel, false); syncNumbers(panel, !!panel.querySelector('.done-num')); }
       const jobs = queue.splice(0);
       if (jobs.length) requestAnimationFrame(() => jobs.forEach(fn => fn()));
@@ -121,7 +263,7 @@ const Motion = (() => {
       document.getElementById('app').style.setProperty('--dx', `${order.indexOf(b) > order.indexOf(a) ? 16 : -16}px`);
       if (!on()) return;
       const icon = document.querySelector(`#tabs [data-tab="${b}"] .ic`);
-      if (icon) icon.animate([{ transform: 'scale(1)' }, { transform: 'translateY(-4px) scale(1.2)' }, { transform: 'scale(1)' }], { duration: 340, easing: SPRING });
+      if (icon) sp(icon, [{ transform: 'translateY(-5px) scale(.78)' }, { transform: 'none' }], { bounce: 0.55, dur: 0.36 });
     },
     stagger(selector) {
       if (!on()) return;
@@ -130,11 +272,23 @@ const Motion = (() => {
     closeSheet(host, done) {
       const panel = host.querySelector('.panel'), scrim = host.querySelector('.scrim');
       if (!on() || !panel) { done(); return; }
+      if (host.dataset.closing) return;
+      host.dataset.closing = '1';
       host.style.pointerEvents = 'none';
-      const finish = done;
-      done = () => { host.style.pointerEvents = ''; finish(); };
-      scrim?.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 170, fill: 'forwards' });
-      panel.animate([{ transform: 'none' }, { transform: 'translateY(100%)' }], { duration: 180, easing: 'ease-in', fill: 'forwards' }).onfinish = done;
+      const from = getComputedStyle(panel).transform;
+      const startFade = scrim ? Number(getComputedStyle(scrim).opacity) : 1;
+      panel.style.transform = '';
+      if (scrim) scrim.style.opacity = '';
+      scrim?.animate([{ opacity: startFade }, { opacity: 0 }], { duration: 220, fill: 'forwards' });
+      sp(panel, [{ transform: from === 'none' ? 'translateY(0)' : from }, { transform: 'translateY(100%)' }], { bounce: 0, dur: 0.24, fill: 'forwards' }).onfinish = () => {
+        host.style.pointerEvents = '';
+        delete host.dataset.closing;
+        done();
+      };
+    },
+    // Moving between sheets slides like a navigation push.
+    sheetPush(panel, back) {
+      if (on()) [...panel.children].slice(0, 6).forEach(el => sp(el, [{ transform: `translateX(${back ? -26 : 26}px)`, opacity: 0 }, { transform: 'none', opacity: 1 }], { bounce: 0.1, dur: 0.3 }));
     },
 
     /* ---------- Moments ---------- */
@@ -143,9 +297,9 @@ const Motion = (() => {
       const btn = document.querySelector(`.tick[data-i="${i}"][data-j="${j}"]`);
       if (!btn) return;
       const [x, y] = center(btn);
-      btn.animate([{ transform: 'scale(.55) rotate(-14deg)' }, { transform: 'scale(1.28) rotate(5deg)', offset: 0.55 }, { transform: 'none' }], { duration: 360, easing: 'ease-out' });
+      sp(btn, [{ transform: 'scale(.6)' }, { transform: 'none' }], { bounce: 0.6, dur: 0.38 });
       const row = btn.closest('tr');
-      if (row) [...row.querySelectorAll('input')].forEach((el, n) => el.animate([{ transform: 'translateY(0)' }, { transform: 'translateY(-4px)' }, { transform: 'translateY(0)' }], { duration: 240, delay: n * 34, easing: SPRING }));
+      if (row) [...row.querySelectorAll('input')].forEach((el, n) => sp(el, [{ transform: 'translateY(-5px)' }, { transform: 'none' }], { bounce: 0.5, dur: 0.3, delay: n * 30 }));
       ring(x, y);
       burst(x, y, { count: best ? 34 : 12, velocity: best ? 26 : 15, spread: best ? 110 : 80, ticks: best ? 90 : 46, scalar: 0.7 });
       float(best ? 'New best!' : beat ? 'Beat last time!' : text, x - 44, y - 16, best);
@@ -153,7 +307,7 @@ const Motion = (() => {
         const card = btn.closest('.ex');
         if (card) {
           sweep(card);
-          card.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.018)' }, { transform: 'scale(1)' }], { duration: 380, easing: SPRING });
+          sp(card, [{ transform: 'scale(1.025)' }, { transform: 'none' }], { bounce: 0.45, dur: 0.42 });
           const r = card.getBoundingClientRect();
           burst(r.left + r.width / 2, Math.max(r.top + 34, 70), { count: 30, spread: 130, velocity: 24, ticks: 80 });
           setTimeout(() => float('Exercise done', innerWidth / 2, Math.max(r.top + 30, 90), true), 90);
@@ -168,7 +322,7 @@ const Motion = (() => {
       burst(x, y, { count: 20, spread: 100, velocity: 20 });
       if (allClear) {
         const big = document.querySelector('.all-clear');
-        if (big) big.animate([{ transform: 'scale(.7)', opacity: 0 }, { transform: 'scale(1.06)', opacity: 1, offset: 0.65 }, { transform: 'none' }], { duration: 520, easing: 'ease-out' });
+        if (big) sp(big, [{ transform: 'scale(.7)', opacity: 0 }, { transform: 'none', opacity: 1 }], { bounce: 0.45, dur: 0.46 });
         setTimeout(() => { burst(innerWidth * 0.1, innerHeight * 0.5, { angle: 60, count: 44, velocity: 42, spread: 60, ticks: 110 }); burst(innerWidth * 0.9, innerHeight * 0.5, { angle: 120, count: 44, velocity: 42, spread: 60, ticks: 110 }); }, 160);
       }
     },
@@ -189,7 +343,7 @@ const Motion = (() => {
       el.className = 'fx-level';
       el.innerHTML = `<span class="level fx-badge"><b>${level}</b><span>Level</span></span><strong>Level up</strong>`;
       fxLayer().appendChild(el);
-      const a = el.firstChild.animate([{ transform: 'scale(.2) rotate(-40deg)', opacity: 0 }, { transform: 'scale(1.3) rotate(6deg)', opacity: 1, offset: 0.55 }, { transform: 'scale(1)', opacity: 1 }], { duration: 560, easing: 'ease-out' });
+      const a = sp(el.firstChild, [{ transform: 'scale(.2) rotate(-40deg)', opacity: 0 }, { transform: 'none', opacity: 1 }], { bounce: 0.5, dur: 0.5 });
       el.lastChild.animate([{ transform: 'translateY(14px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 320, delay: 260, easing: OUT, fill: 'backwards' });
       a.onfinish = () => el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300, delay: 1000, fill: 'forwards' }).onfinish = () => el.remove();
       burst(innerWidth / 2, innerHeight * 0.42, { count: 70, spread: 360, velocity: 30, ticks: 120, scalar: 1 });
@@ -199,7 +353,7 @@ const Motion = (() => {
     foodAdded(btn, kcal) {
       if (!on()) return;
       const [x, y] = center(btn);
-      btn.animate([{ transform: 'rotate(0) scale(1)' }, { transform: 'rotate(180deg) scale(1.3)' }, { transform: 'rotate(360deg) scale(1)' }], { duration: 400, easing: 'ease-out' });
+      sp(btn, [{ transform: 'rotate(-120deg) scale(.7)' }, { transform: 'none' }], { bounce: 0.5, dur: 0.4 });
       ring(x, y);
       burst(x, y, { count: 8, velocity: 13, spread: 90, ticks: 36, scalar: 0.6 });
       float(`+${fmt(kcal)} kcal`, x - 40, y - 12);

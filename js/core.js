@@ -49,7 +49,7 @@ async function writeSave() {
     try { idb = await openDB(); await idbPut('state', copy); ok = true; } catch (e2) { idb = null; }
   }
   try { localStorage.setItem(DB_NAME, JSON.stringify(copy)); ok = true; } catch (e) { /* quota: IndexedDB still has it */ }
-  if (!ok) toast('Could not save. Export a backup from the You tab.');
+  if (!ok) toast('Could not save on this phone. Try freeing up some storage.');
   else Cloud.changed();
 }
 let saveTimer = null;
@@ -57,7 +57,7 @@ function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(writeS
 function flushSave() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; writeSave(); } }
 
 /* ---------- State ---------- */
-const APP_VERSION = 6; // matches CACHE in sw.js
+const APP_VERSION = 7; // matches CACHE in sw.js
 const THEMES = [
   { id: 'game', name: 'Quest', bar: '#170e33', fx: ['#b78eff', '#dfceff', '#ffffff', '#7f5cff'], shapes: ['star', 'circle'], burst: 1 },
   { id: 'light', name: 'Minimal', bar: '#f7f7f4', fx: ['#17171a', '#8a8a8e', '#c9c9c5'], shapes: ['circle'], burst: 0.6 },
@@ -86,7 +86,6 @@ function defaultState() {
     deloadUntil: null,
     dismissed: {},
     settings: { usdaKey: '', sound: true, showRir: false, showWaist: false, theme: 'game', animations: true, place: 'gym', placeOn: null, homeGear: {} },
-    lastBackup: null,
   };
 }
 
@@ -95,6 +94,10 @@ function migrate(saved) {
   if (!saved) return null;
   if (saved.v >= 2) {
     const d = defaultState();
+    // Older saves named the built-in plan after where it came from.
+    if (saved.program?.key === 'final') saved.program.name = "Founder's plan";
+    if (saved.program?.key === 'first') saved.program.name = "Founder's plan, earlier version";
+    if (saved.programArchive?.final) saved.programArchive.final.name = "Founder's plan";
     return { ...d, ...saved, settings: { ...d.settings, ...saved.settings }, profile: { ...d.profile, ...saved.profile }, goal: { ...d.goal, ...saved.goal }, targets: { ...d.targets, ...saved.targets }, muscleGoal: { ...d.muscleGoal, ...saved.muscleGoal } };
   }
   const s = defaultState();
@@ -144,14 +147,14 @@ function migrate(saved) {
   s.savedMeals = saved.savedMeals || [];
   s.settings = { ...s.settings, usdaKey: saved.settings?.usdaKey || '', sound: saved.settings?.sound ?? true };
   s.settings.showWaist = Object.values(s.days).some(d => d.waist != null);
-  s.lastBackup = saved.lastBackup || null;
   return s;
 }
 
+const freshSetup = () => ({ step: 0, name: '', weight: '', height: '', age: '', sex: '', goal: 'recomp', activity: 'moderate', plan: 'final', kcal: '', protein: '', carbs: '', fat: '' });
 let state = defaultState();
 const ui = {
   tab: 'today', openedOn: today(), foodDate: today(), logDate: today(), planDay: new Date().getDay(), sheet: null, sheetStack: [],
-  range: 90, rest: null, liftChart: null, lastCleared: {}, bars: {}, nums: {}, enter: true, searchToken: 0, foodIndex: {}, foodDb: { loaded: 0, total: 0, done: false },
+  range: 90, rest: null, liftChart: null, setup: freshSetup(), lastCleared: {}, bars: {}, nums: {}, enter: true, searchToken: 0, foodIndex: {}, foodDb: { loaded: 0, total: 0, done: false },
   charts: {}, swapScope: 'today', foodTab: 'all', fresh: true,
 };
 

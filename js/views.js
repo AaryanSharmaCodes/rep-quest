@@ -7,7 +7,7 @@ const ICON = {
   you: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4.500 4-6.500 8-6.500s7 2 8 6.500"/></svg>',
   swap: '<svg viewBox="0 0 24 24"><path d="M4 8h13l-4-4M20 16H7l4 4"/></svg>',
   more: '<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.200"/><circle cx="12" cy="12" r="1.200"/><circle cx="19" cy="12" r="1.200"/></svg>',
-  tick: '<svg viewBox="0 0 24 24"><path d="M5 13l4.500 4.500L19 7"/></svg>',
+  tick: '<svg viewBox="0 0 24 24"><path pathLength="1" d="M5 13l4.500 4.500L19 7"/></svg>',
   close: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   back: '<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
   next: '<svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>',
@@ -99,16 +99,15 @@ function adviceList() {
   const lastDeload = state.lastDeloadDate || state.profile.startDate;
   const weeksOn = lastDeload ? daysBetween(lastDeload, now) / 7 : 0;
   if (!inDeload() && weeksOn >= 5 && (stalled.length >= 3 || strengthTrend(state.workouts, addDays(now, -21)).state === 'down')) {
-    add({ id: 'deload', title: 'Consider a lighter week', body: `${Math.floor(weeksOn)} weeks in and ${stalled.length} lifts have stalled. A week at half the sets and 10% less weight clears fatigue. Your plan suggests one every 5 to 8 hard weeks.`, action: ['Start lighter week', 'startDeload', {}], refs: ['bell23'] });
+    add({ id: 'deload', title: 'Consider a lighter week', body: `${Math.floor(weeksOn)} weeks in and ${stalled.length} lifts have stalled. A week at half the sets and 10% less weight clears fatigue. A common rule of thumb is one every 5 to 8 hard weeks.`, action: ['Start lighter week', 'startDeload', {}], refs: ['bell23'] });
   } else if (stalledToday) {
     add({ id: `stall-${stalledToday}`, title: `${stalledToday} has stalled`, body: 'No progress across 4 sessions. Try a small jump, an extra set, or swap it for a close alternative during your workout.', action: ['See history', 'sheet', { type: 'lift', name: stalledToday }], refs: ['plotkin22'] });
   }
   const sleep = series('sleep', 7).map(x => x.v);
-  if (sleep.length >= 4 && avg(sleep) < 7) add({ id: 'sleep', title: `Sleep is averaging ${round(avg(sleep), 1)} h`, body: `Your plan asks for ${tg.sleep} to 9 hours. Recovery shows up in your lifts before anywhere else.` });
+  if (sleep.length >= 4 && avg(sleep) < 7) add({ id: 'sleep', title: `Sleep is averaging ${round(avg(sleep), 1)} h`, body: `Aim for ${tg.sleep} to 9 hours. Recovery shows up in your lifts before anywhere else.` });
 
-  if (!state.dismissed.creatine) add({ id: 'creatine', title: 'Creatine is the one supplement your plan prioritises', body: '3 to 5 g every day, including rest days. You can log it as a food to remember it.', refs: ['kreider17'], once: true });
-  const backedUp = Cloud.user() ? 0 : state.lastBackup ? daysBetween(state.lastBackup, now) : 999;
-  if (backedUp >= 14 && (state.workouts.length || Object.keys(state.days).length > 3)) add({ id: 'backup', title: 'Save a backup', body: 'Your data lives only on this phone. Keep a copy in Files or iCloud Drive.', action: ['Save backup', 'exportData', {}] });
+  if (!state.dismissed.creatine) add({ id: 'creatine', title: 'Creatine is the best-supported supplement', body: '3 to 5 g every day, including rest days. You can log it as a food to remember it.', refs: ['kreider17'], once: true });
+  if (Cloud.enabled() && !Cloud.user() && (state.workouts.length || Object.keys(state.days).length > 3)) add({ id: 'signin', title: 'Sign in to keep your data safe', body: 'Right now your data lives only on this phone. Signing in with Google saves it to your account.', action: ['Continue with Google', 'cloudSignIn', {}], hold: true });
   return list;
 }
 function proteinPicks(left) {
@@ -122,7 +121,7 @@ function slotNow() {
 }
 function adviceRow(o) {
   const payload = o.action ? esc(JSON.stringify(o.action[2])) : '';
-  return `<li class="adv${o.tone === 'hot' ? ' hot' : ''}">
+  return `<li data-flip data-key="adv-${esc(o.id)}" class="adv${o.tone === 'hot' ? ' hot' : ''}">
     <h3>${esc(o.title)}</h3><p>${esc(o.body)}</p>
     <div class="adv-foot">${o.action ? `<button class="link strong" data-a="adviceGo" data-kind="${o.action[1]}" data-payload="${payload}">${esc(o.action[0])}</button>` : ''}
     ${o.hold ? '' : `<button class="link" data-a="dismiss" data-id="${esc(o.id)}" data-once="${o.once ? 1 : ''}">${o.once ? 'Got it' : 'Hide for a week'}</button>`}
@@ -132,7 +131,7 @@ function adviceRow(o) {
 /* ---------- Today ---------- */
 function questCard(q, info, fresh) {
   const pct = info.pct == null ? null : clamp(info.pct, 0, 1);
-  return `<li><button ${info.open} class="quest${q.done ? ' done' : ''}${fresh.includes(q.id) ? ' fresh' : ''}">
+  return `<li data-flip data-key="quest-${q.id}"><button ${info.open} class="quest${q.done ? ' done' : ''}${fresh.includes(q.id) ? ' fresh' : ''}">
     <span class="q-main"><span class="q-name">${info.label}</span><span class="q-sub">${info.sub}</span></span>
     <span class="q-val">[${info.value}]</span>
     <span class="q-mark">${q.done ? i('tick') : i('next')}</span>
@@ -185,9 +184,6 @@ function viewToday() {
     const shown = hasLog ? count : 0;
     return `<div class="wk${day === k ? ' now' : ''}${shown === QUESTS.length ? ' all' : ''}" aria-label="${DAY_SHORT[wd]}: ${shown} of ${QUESTS.length} quests"><i style="--p:${shown / QUESTS.length}"></i><span>${DAY_SHORT[wd][0]}</span></div>`;
   }).join('');
-  // Weighing in is already a quest, so it doesn't need a second reminder here.
-  const advice = adviceList().filter(x => x.id !== 'weigh').slice(0, 2);
-  const startBtn = !a && plan && !trained.length ? `${atHome() ? homeBanner(plan.id) : ''}<button class="btn solid" data-a="startDay" data-id="${plan.id}">Start ${esc(plan.name)}${atHome() ? ' at home' : ''}</button>${atHome() ? '' : homeButton(plan.id)}` : '';
   return `
   <header class="top">
     <div><h1>${date.toLocaleDateString('en-IN', { weekday: 'long' })}</h1><p class="dim">${shortDate(k)}${s.streak > 1 ? `, ${s.streak}-day streak` : ''}</p></div>
@@ -197,7 +193,6 @@ function viewToday() {
   <section class="block first">
     <div class="q-head"><h2>Daily Quests</h2><span class="q-count">[${cleared.length} / ${quests.length}]</span></div>
     ${open.length ? `<ul class="quests">${open.map(q => questCard(q, info[q.id], fresh)).join('')}</ul>` : '<p class="all-clear">All quests cleared today.</p>'}
-    ${startBtn ? `<div class="start-box">${startBtn}</div>` : ''}
   </section>
   ${cleared.length ? `<section class="block"><h2>Completed</h2><ul class="quests">${cleared.map(q => questCard(q, info[q.id], fresh)).join('')}</ul></section>` : ''}
   <section class="block"><div class="week">${week}</div></section>`;
@@ -250,7 +245,7 @@ function viewPlan() {
     <ol class="plan-list">${day.exercises.map(e => {
       const n = targetFor(e), last = exerciseHistory(state.workouts, e.name, 1)[0];
       const lastLine = last ? `Last: ${esc(lastTimeText(last.sets, e.unit))}` : '';
-      return `<li><button data-a="openSheet" data-type="lift" data-name="${esc(e.name)}"><span class="pl-name">${esc(e.name)}</span><span class="pl-sub">${e.sets} × ${e.lo} to ${e.hi}${e.unit === 'sec' ? ' s' : ''}</span>${lastLine ? `<span class="pl-next pl-last">${lastLine}</span>` : ''}<span class="pl-next">${n.w ? `${esc(n.headline)}: ${round(n.w, 2)} kg` : esc(n.headline)}</span></button></li>`;
+      return `<li data-flip data-key="plan-${esc(e.id)}"><button data-a="openSheet" data-type="lift" data-name="${esc(e.name)}"><span class="pl-name">${esc(e.name)}</span><span class="pl-sub">${e.sets} × ${e.lo} to ${e.hi}${e.unit === 'sec' ? ' s' : ''}</span>${lastLine ? `<span class="pl-next pl-last">${lastLine}</span>` : ''}<span class="pl-next">${n.w ? `${esc(n.headline)}: ${round(n.w, 2)} kg` : esc(n.headline)}</span></button></li>`;
     }).join('')}</ol>
     ${doneToday ? '' : `<button class="btn solid wide" data-a="startDay" data-id="${day.id}">${inDeload() ? 'Start lighter session' : isHome ? 'Start home workout' : 'Start workout'}</button>${isHome ? '' : homeButton(day.id)}`}
   ` : `<div class="session-head"><div><h2>Rest day</h2><p class="dim">Eat normally, recover.</p></div></div>
@@ -316,7 +311,7 @@ function exerciseBlock(e, ei) {
   const options = n.options.length ? `<div class="opts">${n.options.map(o => `<button class="opt${o.id === chosen ? ' on' : ''}" data-a="chooseOption" data-i="${ei}" data-o="${o.id}"><b>${esc(o.label)}</b><span>${o.w ? `${round(o.w, 2)} kg` : 'BW'} × ${o.reps[0]}</span></button>`).join('')}</div>` : '';
   const allDone = e.sets.length && e.sets.every(s => s.done);
   const linked = e.superset && ei < state.active.exercises.length - 1;
-  return `<article class="ex${allDone ? ' ex-done' : ''}${linked ? ' ex-linked' : ''}" id="ex-${ei}">
+  return `<article data-flip data-key="ex-${esc(e.id || ei)}" class="ex${allDone ? ' ex-done' : ''}${linked ? ' ex-linked' : ''}" id="ex-${ei}">
     <div class="ex-head">
       <button class="ex-name" data-a="openSheet" data-type="lift" data-name="${esc(e.name)}">${esc(e.name)}</button>
       <button class="ic-btn" data-a="openSheet" data-type="swap" data-i="${ei}" aria-label="Swap exercise">${i('swap')}</button>
@@ -355,9 +350,9 @@ function viewFood() {
     const kcal = sum(list.map(e => e.kcal)), p = sum(list.map(e => e.p));
     const saved = state.savedMeals.filter(m => m.slot === slot).slice(0, 2);
     const y = yMeals[slot] || [];
-    return `<section class="meal" data-slot="${slot}">
+    return `<section class="meal" data-flip data-key="meal-${slot}" data-slot="${slot}">
       <div class="meal-head"><h2>${name}</h2><span class="dim">${list.length ? `${fmt(kcal)} kcal, ${Math.round(p)} g protein` : ''}</span></div>
-      ${list.length ? `<ul class="rows">${list.map(e => `<li><button class="row" data-a="openSheet" data-type="entry" data-slot="${slot}" data-id="${e.id}"><span>${esc(e.name)}<em>${esc(e.amount || e.label || '')}</em></span><span class="dim">${fmt(e.kcal)}</span></button></li>`).join('')}</ul>` : ''}
+      ${list.length ? `<ul class="rows">${list.map(e => `<li data-flip data-key="food-${esc(e.id)}"><button class="row" data-a="openSheet" data-type="entry" data-slot="${slot}" data-id="${e.id}"><span>${esc(e.name)}<em>${esc(e.amount || e.label || '')}</em></span><span class="dim">${fmt(e.kcal)}</span></button></li>`).join('')}</ul>` : ''}
       <div class="meal-acts">
         <button class="pill solid" data-a="openSheet" data-type="food" data-slot="${slot}" data-date="${k}">${i('plus')} Add</button>
         ${!list.length && y.length ? `<button class="pill" data-a="copyMeal" data-slot="${slot}" data-from="${yesterday}">Same as yesterday</button>` : ''}
@@ -408,7 +403,7 @@ function viewProgress() {
     <ul class="volume">${MUSCLE_ORDER.map(m => {
       const v = vol[m] || 0, pctV = clamp(v / goal.hi * 100, 0, 100), lo = goal.lo / goal.hi * 100;
       return `<li><span>${MUSCLE_NAMES[m]}${PRIORITY_MUSCLES.includes(m) ? '<sup>*</sup>' : ''}</span><div class="vol-track"><i class="vol-zone" style="left:${lo}%"></i><i class="vol-fill${v >= goal.lo ? ' met' : ''}" style="width:${pctV}%"></i></div><b>${round(v, 1)}</b></li>`;
-    }).join('')}</ul><p class="dim sm">* Priority in your plan</p></section>
+    }).join('')}</ul><p class="dim sm">* Extra attention for an aesthetic physique</p></section>
   <section class="block card"><h2>Strength</h2>
     ${liftNames.length ? `<select class="pick" data-f="liftChart" aria-label="Choose an exercise">${liftNames.slice().sort().map(n => `<option ${n === lift ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
     ${lineChart({ id: 'lift', points: liftSeries, unit: libEntry(lift)?.unit === 'sec' ? 's' : 'kg', height: 150, decimals: 1 })}<p class="dim sm">Estimated one-rep max from your best set, using the Epley formula. Treat it as a trend, not a true max.</p>` : '<p class="empty">Finish a workout to see strength trends.</p>'}
@@ -452,7 +447,6 @@ function viewYou() {
   const s = computeStats(), p = state.profile, t = state.targets, w = latestWeight();
   const db = ui.foodDb;
   const earned = MILESTONES.filter(m => m[2](s));
-  const backup = state.lastBackup ? `Last saved ${niceDate(state.lastBackup)}` : 'Not saved yet';
   return `
   <header class="top"><div><h1>${esc(p.name || 'You')}</h1><p class="dim">Level ${s.level}, ${fmt(s.xp)} XP in total</p></div></header>
   <div class="level-track"><i data-k="level" data-pct="${s.into / s.need * 100}" style="width:${s.into / s.need * 100}%"></i></div>
@@ -476,8 +470,7 @@ function viewYou() {
     ${Cloud.user() ? `<ul class="rows"><li><div class="row"><span>${esc(Cloud.user().email)}<em id="cloud-status">${esc(Cloud.statusText())}</em></span></div></li>
       <li><button class="row" data-a="cloudSignOut"><span>Sign out</span></button></li></ul>`
     : `${Cloud.enabled() ? `<button class="btn google" data-a="cloudSignIn">${GOOGLE_G} Continue with Google</button><p class="dim sm cloud-note">Saves your data to your Google account, so it follows you to any phone.</p>` : ''}
-      <ul class="rows"><li><button class="row" data-a="exportData"><span>Save backup</span><span class="dim">${backup}</span></button></li>
-      <li><button class="row" data-a="importData"><span>Restore from backup</span></button></li></ul><input type="file" id="restore-file" accept="application/json,.json" hidden>`}</section>
+`}</section>
   <section class="block"><h2>Food database</h2>
     <p class="dim sm">${db.total ? `${fmt(db.loaded)} of ${fmt(db.total)} foods ready on this phone${db.done ? ', and they work offline.' : db.partial ? '. The rest will download when you have signal.' : '.'}` : 'Loads when you first search.'}</p>
     <ul class="rows"><li><button class="row" data-a="openSheet" data-type="usda"><span>USDA online search key</span><span class="dim">${state.settings.usdaKey ? 'Added' : 'Optional'}</span></button></li></ul></section>
@@ -489,18 +482,45 @@ function viewYou() {
     <li><button class="row" data-a="checkUpdate"><span>Check for updates</span><span class="dim">Version ${APP_VERSION}</span></button></li></ul></section>`;
 }
 
+/* ---------- First-time setup ---------- */
+const setupField = (label, k, attrs = '') => `<label>${label}<input data-f="setupField" data-k="${k}" id="s-${k}" value="${esc(ui.setup[k])}" ${attrs}></label>`;
+function setupStep(s) {
+  if (s.step === 1) return `<h1>About you</h1><p>These set your starting calories, and you can change them any time.</p>
+    <div class="form">${setupField('First name', 'name', 'autocomplete="given-name"')}
+      <div class="two">${setupField('Weight, kg', 'weight', 'inputmode="decimal"')}${setupField('Height, cm', 'height', 'inputmode="numeric"')}</div>
+      <div class="two">${setupField('Age', 'age', 'inputmode="numeric"')}<div class="field-label">Sex, for the formula<div class="seg">${[['male', 'Male'], ['female', 'Female']].map(([k, l]) => `<button class="${s.sex === k ? 'on' : ''}" data-a="setupPick" data-k="sex" data-v="${k}">${l}</button>`).join('')}</div></div></div></div>`;
+  if (s.step === 2) return `<h1>Your goal</h1><p>Set by how fast your weight should move, with no goal weight needed.</p>
+    <div class="choice col setup-choice">${Object.entries(GOALS).filter(([k]) => k !== 'custom').map(([k, g]) => `<button class="${s.goal === k ? 'on' : ''}" data-a="setupPick" data-k="goal" data-v="${k}"><b>${esc(g.label)}</b><span>${signed(g.lo, 2)} to ${signed(g.hi, 2)}% a week</span></button>`).join('')}</div>
+    <h3 class="sh-sub">How active are you?</h3>
+    <div class="choice col setup-choice">${ACTIVITY.map(a => `<button class="${s.activity === a.id ? 'on' : ''}" data-a="setupPick" data-k="activity" data-v="${a.id}"><b>${esc(a.label)}</b></button>`).join('')}</div>`;
+  if (s.step === 3) return `<h1>Pick a plan</h1><p>You can edit it, swap exercises or switch plans later.</p>
+    <div class="plan-cards">${PROGRAMS.map(p => `<button class="plan-card${s.plan === p.key ? ' on' : ''}" data-a="setupPick" data-k="plan" data-v="${p.key}"><b>${esc(p.name)}</b><em>${esc(p.source)}</em><span>${esc(p.says)}</span></button>`).join('')}</div>`;
+  return `<h1>Your targets</h1><p>Worked out from your details. The coach fine-tunes them from your real data after 10 weigh-ins and 4 workouts.</p>
+    <div class="form">${setupField('Calories', 'kcal', 'inputmode="numeric"')}
+      <div class="three">${setupField('Protein, g', 'protein', 'inputmode="numeric"')}${setupField('Carbs, g', 'carbs', 'inputmode="numeric"')}${setupField('Fat, g', 'fat', 'inputmode="numeric"')}</div></div>
+    <h3 class="sh-sub">Choose a look</h3>
+    <div class="themes">${THEMES.map(t => `<button class="theme-card${state.settings.theme === t.id ? ' on' : ''}" data-a="setTheme" data-v="${t.id}"><span class="tc tc-${t.id}"><i></i><i></i><i></i></span><b>${t.name}</b></button>`).join('')}</div>`;
+}
 function viewWelcome() {
-  return `<section class="welcome">
-    <h1>Rep Quest</h1>
-    <p>Clear your quests every day: train, hit protein and calories, weigh in. Your numbers steer the plan.</p>
-    ${Cloud.user() ? `<p class="dim sm">Signed in as ${esc(Cloud.user().email)}. ${esc(Cloud.statusText())}</p>` : Cloud.enabled() ? `<button class="btn google" data-a="cloudSignIn">${GOOGLE_G} Continue with Google</button><p class="dim sm center">Or start on this phone only:</p>` : ''}
-    <form id="welcome-form" class="form">
-      <label>First name<input id="w-name" autocomplete="given-name"></label>
-      <div class="two"><label>Weight, kg<input id="w-weight" inputmode="decimal" required></label><label>Height, cm<input id="w-height" inputmode="numeric"></label></div>
-      <div class="two"><label>Age<input id="w-age" inputmode="numeric"></label><label>Sex, for the formula<select id="w-sex"><option value="">Choose</option><option value="male">Male</option><option value="female">Female</option></select></label></div>
-      <button class="btn solid wide" type="submit">Start</button>
-    </form>
-    <button class="link" data-a="importData">Restore from a backup</button>
-    <input type="file" id="restore-file" accept="application/json,.json" hidden>
+  const me = Cloud.user();
+  if (me && !Cloud.pulled()) {
+    return `<section class="welcome"><h1>Rep Quest</h1><p>Loading your account...</p><button class="link strong" data-a="cloudRetry">Try again</button></section>`;
+  }
+  const s = ui.setup;
+  if (me && s.step < 1) { s.step = 1; s.name = s.name || (me.name || '').split(' ')[0]; }
+  if (s.step < 1) {
+    return `<section class="welcome">
+      <h1>Rep Quest</h1>
+      <p>Clear your quests every day: train, hit protein and calories, weigh in. Your numbers steer the plan.</p>
+      ${Cloud.enabled() ? `<button class="btn google" data-a="cloudSignIn">${GOOGLE_G} Continue with Google</button>` : ''}
+      <button class="btn line" data-a="setupGo" data-n="1">Start without an account</button>
+      <button class="link" data-a="importData">Restore from an old backup</button>
+      <input type="file" id="restore-file" accept="application/json,.json" hidden>
+    </section>`;
+  }
+  return `<section class="setup">
+    <div class="setup-steps" aria-label="Step ${s.step} of 4">${[1, 2, 3, 4].map(n => `<i class="${n <= s.step ? 'on' : ''}"></i>`).join('')}</div>
+    ${setupStep(s)}
+    <div class="setup-foot">${s.step > (me ? 1 : 0) ? '<button class="btn line" data-a="setupBack">Back</button>' : ''}<button class="btn solid" data-a="setupNext">${s.step === 4 ? 'Start' : 'Next'}</button></div>
   </section>`;
 }

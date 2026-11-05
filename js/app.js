@@ -6,6 +6,7 @@ function toast(text, cls = '') {
   el.className = `toast ${cls}`;
   el.textContent = text;
   document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.classList.add('out'), 2300);
   setTimeout(() => el.remove(), 2600);
 }
 let audio = null;
@@ -51,7 +52,12 @@ function render() {
   const entering = ui.enter;
   ui.enter = false;
   app.classList.remove('enter'); // a re-render mid-entrance must not replay it
-  app.innerHTML = onWelcome ? viewWelcome() : VIEWS[ui.tab]();
+  const html = onWelcome ? viewWelcome() : VIEWS[ui.tab]();
+  const screen = onWelcome ? `setup-${ui.setup.step}` : `${ui.tab}-${!!state.active}`;
+  // Same screen: change only what changed. New screen: draw it fresh.
+  if (!entering && ui.screen === screen && app.firstChild) Motion.morph(app, html);
+  else app.innerHTML = html;
+  ui.screen = screen;
   renderTabs(onWelcome);
   renderSheet();
   tickRest();
@@ -76,6 +82,7 @@ function renderTabs(onWelcome) {
 function renderSheet() {
   const el = document.getElementById('sheet');
   const s = ui.sheet;
+  document.body.classList.toggle('sheet-open', !!s);
   if (!s) {
     document.body.classList.remove('locked');
     if (!el.hidden) Motion.closeSheet(el, () => { if (!ui.sheet) { el.hidden = true; el.innerHTML = ''; } });
@@ -83,14 +90,26 @@ function renderSheet() {
   }
   el.style.pointerEvents = '';
   const old = el.querySelector('.panel');
-  const scroll = old && el.dataset.type === s.type ? old.scrollTop : 0;
-  const first = el.hidden;
+  const first = el.hidden || !!el.dataset.closing || !old;
+  const sameSheet = !first && el.dataset.type === s.type;
+  delete el.dataset.closing;
   el.hidden = false;
   el.dataset.type = s.type;
+  // The page behind sinks back as the sheet rises, scaling around what you were looking at.
+  if (first) document.getElementById('app').style.setProperty('--oy', `${window.scrollY + innerHeight * 0.4}px`);
   document.body.classList.add('locked');
   const tall = ['food', 'swap', 'addExercise', 'method', 'dayEdit', 'workout', 'lift', 'exercise', 'programs', 'schedule'].includes(s.type);
-  el.innerHTML = `<div class="scrim" data-a="closeAll"></div><div class="panel${tall ? ' tall' : ''}${first ? ' enter' : ''}" role="dialog" aria-modal="true">${SHEETS[s.type](s)}</div>`;
-  el.querySelector('.panel').scrollTop = scroll;
+  const inner = SHEETS[s.type](s);
+  if (first) {
+    el.innerHTML = `<div class="scrim" data-a="closeAll"></div><div class="panel${tall ? ' tall' : ''} enter" role="dialog" aria-modal="true">${inner}</div>`;
+  } else if (sameSheet) {
+    Motion.morph(old, inner);
+  } else {
+    old.className = `panel${tall ? ' tall' : ''}`;
+    old.innerHTML = inner;
+    old.scrollTop = 0;
+    Motion.sheetPush(old);
+  }
   if (s.type === 'lift') fillHowTo(s.name);
 }
 const commit = () => { scheduleSave(); render(); };
@@ -309,29 +328,7 @@ async function fillHowTo(name) {
   } catch (e) { /* offline: the cue above is still there */ }
 }
 
-/* ---------- Backup ---------- */
-async function exportData() {
-  const stamp = today();
-  const blob = new Blob([JSON.stringify({ ...state, exportedAt: new Date().toISOString() })], { type: 'application/json' });
-  const name = `rep-quest-backup-${stamp}.json`;
-  const file = new File([blob], name, { type: 'application/json' });
-  try {
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({ files: [file], title: 'Rep Quest backup' });
-    } else {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = name;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    }
-    state.lastBackup = stamp;
-    toast('Backup saved');
-    commit();
-  } catch (e) {
-    if (e.name !== 'AbortError') toast('Could not save the backup');
-  }
-}
+/* ---------- Restoring an old backup file ---------- */
 async function importFile(file) {
   try {
     const data = JSON.parse(await file.text());
@@ -377,6 +374,41 @@ const A = {
     render();
     window.scrollTo(0, 0);
   },
+  setupGo(d) { ui.setup.step = Number(d.n); ui.enter = true; haptic(); render(); window.scrollTo(0, 0); },
+  setupBack() { A.setupGo({ n: ui.setup.step - 1 }); },
+  setupPick(d) { ui.setup[d.k] = d.v; haptic(); render(); },
+  setupNext() {
+    const s = ui.setup, weight = num(s.weight), height = num(s.height), age = num(s.age);
+    if (s.step === 1) {
+      if (weight == null || weight < 20 || weight > 400) { toast('Enter your weight in kg'); return; }
+      if (height == null || height < 100 || height > 250) { toast('Enter your height in cm'); return; }
+      if (age == null || age < 10 || age > 110) { toast('Enter your age'); return; }
+      if (!s.sex) { toast('Choose one so the formula can work'); return; }
+    }
+    if (s.step === 3) {
+      const t = suggestTargets({ heightCm: height, age, sex: s.sex, activity: s.activity }, weight, GOALS[s.goal]);
+      Object.assign(s, t);
+    }
+    if (s.step < 4) { A.setupGo({ n: s.step + 1 }); return; }
+    const kcal = num(s.kcal), protein = num(s.protein), carbs = num(s.carbs), fat = num(s.fat);
+    if ([kcal, protein, carbs, fat].some(x => x == null || x < 0)) { toast('Fill in every target'); return; }
+    const start = today();
+    state.profile = { ...state.profile, name: s.name.trim(), heightCm: height, age, sex: s.sex, activity: s.activity, startDate: start };
+    state.goal = { mode: s.goal, lo: GOALS[s.goal].lo, hi: GOALS[s.goal].hi };
+    state.program = makeProgram(s.plan);
+    state.targets = { ...state.targets, kcal, protein, carbs, fat };
+    state.targetLog = [{ date: start, kcal, protein, carbs, fat, reason: 'Starting target' }];
+    getDay(start).weight = round(weight, 2);
+    state.onboarded = true;
+    ui.setup = freshSetup();
+    ui.tab = 'today';
+    ui.enter = true;
+    haptic();
+    Motion.after(() => Motion.floatMid("Let's go"));
+    commit();
+    window.scrollTo(0, 0);
+  },
+  cloudRetry() { Cloud.pull(); },
   homeInstead(d) { A.openSheet({ type: 'homeGear', id: d.id }); },
   toggleGear(d, el) {
     state.settings.homeGear[d.k] = !state.settings.homeGear[d.k];
@@ -406,6 +438,7 @@ const A = {
     if (!(await Cloud.signOut())) { toast('Could not reach your account, so you are still signed in. Nothing was lost.'); return; }
     ui.tab = 'today';
     ui.enter = true;
+    ui.setup = freshSetup();
     commit();
   },
   openSheet(d, el) {
@@ -845,7 +878,6 @@ const A = {
     state.goal = { mode: d.mode, lo, hi };
     closeSheet();
   },
-  exportData,
   importData() { document.getElementById('restore-file')?.click(); },
 };
 
@@ -922,6 +954,7 @@ const FIELD = {
     markEdited();
     scheduleSave();
   },
+  setupField(d, el) { ui.setup[d.k] = el.value; },
   setting(d, el) { state.settings[d.k] = el.checked; scheduleSave(); if (d.k === 'animations') Motion.refresh(); },
   liftChart(d, el) { ui.liftChart = el.value; render(); },
   targetCheck() { refreshMacroSum(); },
@@ -956,20 +989,7 @@ document.addEventListener('change', async e => {
     e.target.value = '';
   }
 });
-document.addEventListener('submit', e => {
-  e.preventDefault();
-  if (e.target.id !== 'welcome-form') return;
-  const w = num(v('w-weight'));
-  if (w == null) { toast('Enter your weight'); return; }
-  const start = today();
-  state.profile = { ...state.profile, name: v('w-name').trim(), heightCm: num(v('w-height')), age: num(v('w-age')), sex: v('w-sex') || null, startDate: start };
-  getDay(start).weight = round(w, 2);
-  state.targetLog = [{ date: start, kcal: state.targets.kcal, protein: state.targets.protein, carbs: state.targets.carbs, fat: state.targets.fat, reason: 'Starting target' }];
-  state.onboarded = true;
-  haptic();
-  commit();
-  window.scrollTo(0, 0);
-});
+document.addEventListener('submit', e => e.preventDefault());
 // Touch and drag on any chart to read values.
 let chartEl = null;
 document.addEventListener('pointerdown', e => {

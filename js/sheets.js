@@ -274,7 +274,7 @@ const SHEETS = {
       <h3 class="sh-sub">Choices made in this app</h3>
       <ul class="plain-list sm">
         <li>${fmt(KCAL_PER_KG)} kcal per kg of weight change. The classic 7,700 assumes pure fat, while measured values run lower.</li>
-        <li>The recomp range comes from your plan, not a study, since none pins an exact rate.</li>
+        <li>The recomp range is a working choice, not from a study, since none pins an exact rate.</li>
         <li>Reliability numbers (formula within about ${PRIOR_SD} kcal, food logs within 120 to 350) are reasoned estimates.</li>
         <li>Estimated one-rep max uses the Epley formula, widely used but less accurate at high reps.</li></ul>
       <h3 class="sh-sub">Research used</h3>
@@ -289,7 +289,7 @@ const SHEETS = {
         <li><b>Typical estimates</b><p class="sm dim">About 240 everyday dishes written by hand. Oil and portion size can change them a lot.</p></li>
         <li><b>free-exercise-db</b><p class="sm dim">Exercise instructions and images, released into the public domain under the Unlicense.</p></li>
         <li><b>html5-qrcode</b><p class="sm dim">Barcode reading, Apache 2.0.</p></li>
-        <li><b>canvas-confetti</b><p class="sm dim">Celebration effects by Kiril Vatev, ISC licence.</p></li>
+        <li><b>canvas-confetti, Motion and morphdom</b><p class="sm dim">Celebrations, spring physics and smooth screen updates. ISC and MIT licences.</p></li>
         <li><b>Cinzel, Cinzel Decorative, Silkscreen and Instrument Sans</b><p class="sm dim">Typefaces under the SIL Open Font License.</p></li>
       </ul>
       <p class="sm dim">This app gives general fitness guidance, not medical advice. If neck or shoulder symptoms return, stop that exercise and get it checked.</p>`;

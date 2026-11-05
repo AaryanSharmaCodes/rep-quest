@@ -43,7 +43,7 @@ const Cloud = (() => {
   }
   const decodeJwt = t => JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0))));
   function keepAuth(data) {
-    auth = { uid: data.uid, email: data.email ?? auth?.email, idToken: data.idToken, refreshToken: data.refreshToken, expiresAt: Date.now() + Number(data.expiresIn) * 1000 };
+    auth = { uid: data.uid, email: data.email ?? auth?.email, name: data.name ?? auth?.name, idToken: data.idToken, refreshToken: data.refreshToken, expiresAt: Date.now() + Number(data.expiresIn) * 1000 };
     write(AUTH_KEY, auth);
   }
   // Google comes back to the app with the sign-in in the address.
@@ -71,7 +71,7 @@ const Cloud = (() => {
       if (auth && auth.uid !== d.localId) { state = defaultState(); await writeSave(); }
       sync = { pulled: false, chunks: {} };
       write(SYNC_KEY, sync);
-      keepAuth({ uid: d.localId, email: d.email, idToken: d.idToken, refreshToken: d.refreshToken, expiresIn: d.expiresIn });
+      keepAuth({ uid: d.localId, email: d.email, name: d.displayName, idToken: d.idToken, refreshToken: d.refreshToken, expiresIn: d.expiresIn });
       toast(`Signed in as ${d.email}`);
     } catch (e) {
       toast('Google sign-in did not work. Please try again.');
@@ -181,7 +181,9 @@ const Cloud = (() => {
         sync.chunks[key] = { h: hash(text), rev: doc.updateTime };
         changed = true;
       });
+      const wasPulled = sync.pulled;
       sync.pulled = true;
+      const firstPull = !wasPulled;
       write(SYNC_KEY, sync);
       savedAt = savedAt || Date.now();
       setStatus('saved');
@@ -194,6 +196,8 @@ const Cloud = (() => {
         writeSave();
         ui.enter = true;
         render();
+      } else if (firstPull) {
+        render(); // a brand-new account can now start its setup
       }
       changedSoon();
     } catch (e) {
@@ -283,6 +287,7 @@ const Cloud = (() => {
   return {
     enabled, signIn, signOut, start, pull, statusText,
     user: () => auth,
+    pulled: () => !!sync.pulled,
     expired: () => status === 'expired',
     changed() { if (auth) changedSoon(); },
     pushNow() { if (auth) push(); },

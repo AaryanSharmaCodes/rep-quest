@@ -2,9 +2,9 @@
 // The app itself: each release is one complete saved copy, so old and new files never mix.
 // CHANGE THIS NAME ON EVERY RELEASE, and APP_VERSION in js/core.js with it: a phone only updates when this file changes.
 // The food files are large and only change with a rebuild, so they're fetched once and kept.
-const CACHE = 'rep-quest-v6';
+const CACHE = 'rep-quest-v7';
 const DATA_CACHE = 'rep-quest-data-v1';
-const SHELL = ['./', 'index.html', 'styles.css', 'js/canvas-confetti.js', 'js/cloud.js', 'js/motion.js', 'js/util.js', 'js/science.js', 'js/library.js', 'js/core.js', 'js/foods.js', 'js/charts.js', 'js/views.js', 'js/sheets.js', 'js/app.js', 'food-worker.js', 'manifest.webmanifest', 'fonts/cinzel.woff2', 'fonts/cinzel-deco-700.woff2', 'fonts/silkscreen-700.woff2', 'fonts/instrument-sans.woff2', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
+const SHELL = ['./', 'index.html', 'styles.css', 'js/canvas-confetti.js', 'js/motion-lib.js', 'js/morphdom.js', 'js/cloud.js', 'js/motion.js', 'js/util.js', 'js/science.js', 'js/library.js', 'js/core.js', 'js/foods.js', 'js/charts.js', 'js/views.js', 'js/sheets.js', 'js/app.js', 'food-worker.js', 'manifest.webmanifest', 'fonts/cinzel.woff2', 'fonts/cinzel-deco-700.woff2', 'fonts/silkscreen-700.woff2', 'fonts/instrument-sans.woff2', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {
   // 'reload' skips the browser's HTTP cache. GitHub Pages lets it reuse files for 10 minutes,

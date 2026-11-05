@@ -15,7 +15,7 @@ The calorie coach starts after 10 weigh-ins and 4 workouts. It fits a line throu
 - Open Food Facts, © Open Food Facts contributors, under the [Open Database License](https://opendatacommons.org/licenses/odbl/1-0/). The extract in `foods/india.txt` and `foods/world-*.txt` is shared under the same licence.
 - About 240 everyday dishes I wrote by hand in `tools/curated-foods.js`. These are typical estimates.
 
-`exercises-db.json` comes from [free-exercise-db](https://github.com/yuhonas/free-exercise-db) (Unlicense). Barcode reading uses [html5-qrcode](https://github.com/mebjas/html5-qrcode) (Apache 2.0). Celebrations use [canvas-confetti](https://github.com/catdad/canvas-confetti) (ISC). Fonts are Cinzel, Cinzel Decorative, Silkscreen and Instrument Sans (SIL OFL).
+`exercises-db.json` comes from [free-exercise-db](https://github.com/yuhonas/free-exercise-db) (Unlicense). Barcode reading uses [html5-qrcode](https://github.com/mebjas/html5-qrcode) (Apache 2.0). Animations use spring curves from [Motion](https://github.com/motiondivision/motion) (MIT), [morphdom](https://github.com/patrick-steele-idem/morphdom) (MIT) for smooth screen updates, and [canvas-confetti](https://github.com/catdad/canvas-confetti) (ISC) for celebrations. Fonts are Cinzel, Cinzel Decorative, Silkscreen and Instrument Sans (SIL OFL).
 
 `tools/` rebuilds the food files from the original downloads.
 

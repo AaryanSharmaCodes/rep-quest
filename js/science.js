@@ -34,7 +34,7 @@ const CONFIDENCE_Z = 1.28;         // act when about 90% sure the rate is outsid
 const MAX_STEP = 200, MIN_STEP = 75; // the plan's rule: adjust by 150 to 200 kcal at a time
 
 const GOALS = {
-  recomp: { label: 'Recomp', lo: -0.25, hi: 0.1, says: 'Build muscle at about the same weight. Your plan asks for "stable or slowly declining", and no study pins an exact rate, so this band is a working choice you can edit.', refs: [] },
+  recomp: { label: 'Recomp', lo: -0.25, hi: 0.1, says: 'Build muscle while your weight stays about the same or falls slowly. No study pins an exact rate, so this band is a working choice you can edit.', refs: [] },
   gain: { label: 'Lean gain', lo: 0.25, hi: 0.5, says: 'Gain slowly to keep fat low.', refs: ['iraki19'] },
   cut: { label: 'Cut', lo: -1, hi: -0.5, says: 'Lose fat while keeping muscle.', refs: ['helms14', 'murphy22'] },
   custom: { label: 'Custom', lo: -0.1, hi: 0.1, says: 'Pick your own weekly range.', refs: [] },
@@ -215,12 +215,22 @@ function adjustMacros(targets, newKcal, weight) {
   }
   return out;
 }
+// Starting targets for someone new: what they burn, nudged toward their goal, then protein and fat first (Morton 2018, Iraki 2019).
+function suggestTargets(profile, weight, goal) {
+  const burn = formulaTDEE(profile, weight);
+  const b = bmr(profile, weight);
+  if (!burn) return null;
+  const change = weight * (goal.lo + goal.hi) / 2 / 100 / 7 * KCAL_PER_KG;
+  const kcal = Math.round(Math.max(burn + change, b) / 25) * 25;
+  const protein = Math.round(1.8 * weight), fat = Math.round(0.8 * weight);
+  return { kcal, protein, fat, carbs: Math.max(0, Math.round((kcal - protein * 4 - fat * 9) / 4)) };
+}
 const proteinRange = w => [Math.round(1.6 * w), Math.round(2.2 * w)];
 const fatRange = w => [Math.round(0.5 * w), Math.round(1.5 * w)];
 
 /* ---------- Progressive overload ---------- */
 const OVERLOAD_MODES = {
-  double: { label: 'Reps, then weight', says: 'Work up to the top of your rep range on every set, then add weight. This is the method in your plan.', refs: ['plotkin22'] },
+  double: { label: 'Reps, then weight', says: 'Work up to the top of your rep range on every set, then add weight.', refs: ['plotkin22'] },
   load: { label: 'Add weight', says: 'Keep reps the same and add weight whenever every set hits the target.', refs: ['plotkin22'] },
   rir: { label: 'By effort', says: 'Log reps left in reserve. Weight goes up when sets feel easier than your target.', refs: ['zourdos16', 'refalo23'] },
   manual: { label: 'My own call', says: 'No automatic target. You still see last time and can pick any option.', refs: [] },
@@ -288,7 +298,7 @@ function suggestNext(pe, history) {
     if (rir < rirGoal - 0.5) return result('repeat', pick('same'), 'Match last time', `Sets were very hard: about ${round(rir, 1)} reps left. Own this weight first.`);
     return result('rep', pick('rep'), 'Add a rep', `Effort is on target at about ${round(rir, 1)} reps left.`);
   }
-  // Double progression, as written in the plan: reps first, then weight.
+  // Double progression: reps first, then weight.
   if (allTop && !bodyweight) {
     return result('weight', pick('weight'), `Add ${inc} kg`, `Every set reached ${hi}. Time for more weight.`);
   }
