@@ -9,7 +9,7 @@ const MUSCLE_NAMES = {
 const MUSCLE_ORDER = ['chest', 'lats', 'upper back', 'side delts', 'rear delts', 'front delts', 'biceps', 'triceps', 'quads', 'hamstrings', 'glutes', 'calves', 'abs'];
 // Your plan's priorities: side and rear delts, upper chest, lats and upper back, arms.
 const PRIORITY_MUSCLES = ['side delts', 'rear delts', 'chest', 'lats', 'upper back', 'biceps', 'triceps'];
-const INC = { barbell: 2.5, dumbbell: 2, cable: 2.5, machine: 5, bodyweight: 0, 'smith machine': 2.5, 'ez bar': 2.5, band: 0 };
+const INC = { barbell: 2.5, dumbbell: 2, kettlebell: 4, cable: 2.5, machine: 5, bodyweight: 0, 'smith machine': 2.5, 'ez bar': 2.5, band: 0 };
 
 const X = (name, pattern, p, s, equip, kind, extra = {}) => ({ name, pattern, p, s, equip, kind, inc: extra.inc ?? INC[equip] ?? 2.5, unit: extra.unit || 'reps', rest: extra.rest || (kind === 'compound' ? 150 : 90), lo: extra.lo, hi: extra.hi, cue: extra.cue });
 
@@ -152,6 +152,26 @@ const LIBRARY = [
   X('Dumbbell calf raise', 'calf', 'calves', [], 'dumbbell', 'isolation', { lo: 12, hi: 20, inc: 1 }),
   X('Single-leg calf raise', 'calf', 'calves', [], 'bodyweight', 'isolation', { lo: 10, hi: 20, cue: 'On a step. Pause at the bottom. Reps are per leg.' }),
   X('Leg raise', 'abs', 'abs', [], 'bodyweight', 'isolation', { lo: 10, hi: 20 }),
+  X('Barbell floor press', 'chest press', 'chest', ['triceps', 'front delts'], 'barbell', 'compound', { cue: 'Lie on the floor. Upper arms touch down softly, then press.' }),
+  X('Barbell overhead press', 'shoulder press', 'front delts', ['side delts', 'triceps'], 'barbell', 'compound', { lo: 6, hi: 10, cue: 'Squeeze your glutes. Press straight up, head through at the top.' }),
+  X('Barbell curl', 'biceps curl', 'biceps', ['forearms'], 'barbell', 'isolation', { lo: 8, hi: 12 }),
+  X('Dumbbell pullover', 'vertical pull', 'lats', ['chest'], 'dumbbell', 'isolation', { lo: 10, hi: 15, cue: 'Lie down, arms long. Lower behind your head and pull back with your lats.' }),
+  X('Bench-supported dumbbell row', 'row', 'upper back', ['lats', 'biceps', 'rear delts'], 'dumbbell', 'compound', { cue: 'One knee and hand on the bench. Pull toward your hip.' }),
+  X('Kettlebell floor press', 'chest press', 'chest', ['triceps', 'front delts'], 'kettlebell', 'compound', { cue: 'Lie on the floor. One side at a time if you only have one.' }),
+  X('Kettlebell pullover', 'vertical pull', 'lats', ['chest'], 'kettlebell', 'isolation', { lo: 10, hi: 15 }),
+  X('Kettlebell row', 'row', 'upper back', ['lats', 'biceps', 'rear delts'], 'kettlebell', 'compound', { cue: 'Hinge forward with a flat back. Reps are per arm.' }),
+  X('Kettlebell overhead press', 'shoulder press', 'front delts', ['side delts', 'triceps'], 'kettlebell', 'compound', { cue: 'Reps are per arm.' }),
+  X('Kettlebell lateral raise', 'lateral raise', 'side delts', [], 'kettlebell', 'isolation', { lo: 12, hi: 20, cue: 'Light only. Reps are per arm.' }),
+  X('Kettlebell high pull', 'rear delt', 'rear delts', ['upper back'], 'kettlebell', 'compound', { lo: 10, hi: 15, cue: 'Hinge, then pull with the elbows high and wide.' }),
+  X('Kettlebell curl', 'biceps curl', 'biceps', ['forearms'], 'kettlebell', 'isolation', { lo: 10, hi: 15 }),
+  X('Kettlebell overhead extension', 'triceps', 'triceps', [], 'kettlebell', 'isolation', { lo: 10, hi: 15 }),
+  X('Kettlebell goblet squat', 'squat', 'quads', ['glutes'], 'kettlebell', 'compound', { lo: 10, hi: 20 }),
+  X('Kettlebell lunge', 'single leg', 'quads', ['glutes'], 'kettlebell', 'compound', { lo: 8, hi: 15, cue: 'Reps are per leg.' }),
+  X('Kettlebell deadlift', 'hinge', 'hamstrings', ['glutes', 'lower back'], 'kettlebell', 'compound', { lo: 8, hi: 15, cue: 'Push your hips back. Flat back throughout.' }),
+  X('Kettlebell swing', 'glute', 'glutes', ['hamstrings'], 'kettlebell', 'compound', { lo: 12, hi: 20, cue: 'Snap your hips forward. Arms just guide the bell.' }),
+  X('Kettlebell calf raise', 'calf', 'calves', [], 'kettlebell', 'isolation', { lo: 12, hi: 20 }),
+  X('Chin-up', 'vertical pull', 'lats', ['biceps', 'upper back'], 'bodyweight', 'compound', { lo: 5, hi: 12 }),
+  X('Bench dip', 'triceps', 'triceps', ['chest'], 'bodyweight', 'compound', { lo: 8, hi: 20, cue: 'Hands on the bench. Stop if your shoulders complain.' }),
 ];
 // Home moves stay out of the gym's swap lists, but search still finds them.
 const GYM_LIBRARY = LIBRARY.slice(0, LIBRARY.findIndex(e => e.name === 'Dumbbell floor press'));
@@ -176,16 +196,29 @@ function alternatesFor(name, primary) {
   return [...same, ...also].slice(0, 12);
 }
 
-// Home versions of a gym workout. Heavier options come first; these need a bar or a bench, so they stay at the gym.
-const NOT_AT_HOME = new Set(['Chest dip', 'Pull-up', '45-degree back extension', 'Hanging knee raises', "Captain's chair knee raise", 'Dumbbell bench press', 'Incline dumbbell press']);
-const GEAR_RANK = { dumbbell: 0, band: 1, bodyweight: 2 };
-const canDoAtHome = (e, gear) => e.equip in GEAR_RANK && !NOT_AT_HOME.has(e.name) && (e.equip === 'bodyweight' || !!gear[e.equip]);
+// Home versions of a gym workout: each exercise is replaced by one that does the same job with what you own.
+const HOME_GEAR = [['dumbbell', 'Dumbbells'], ['barbell', 'Barbell'], ['kettlebell', 'Kettlebell'], ['bench', 'Bench'], ['rack', 'Squat rack'], ['band', 'Resistance bands'], ['pullup', 'Pull-up bar'], ['dips', 'Dip bars']];
+// Gym-list exercises that also work at home, and everything the home-list ones need beyond their main equipment.
+const HOME_NEEDS = {
+  'Push-up': [], 'Reverse crunch': [], 'Plank': [], 'Chest dip': ['dips'], 'Pull-up': ['pullup'], 'Chin-up': ['pullup'], 'Hanging knee raises': ['pullup'], 'Bench dip': ['bench'],
+  'Barbell bench press': ['barbell', 'bench', 'rack'], 'Incline barbell bench press': ['barbell', 'bench', 'rack'], 'Close-grip bench press': ['barbell', 'bench', 'rack'],
+  'Barbell back squat': ['barbell', 'rack'], 'Barbell row': ['barbell'], 'Romanian deadlift': ['barbell'], 'Barbell hip thrust': ['barbell', 'bench'], 'Skull crusher': ['barbell', 'bench'],
+  'Dumbbell bench press': ['dumbbell', 'bench'], 'Incline dumbbell press': ['dumbbell', 'bench'], 'Incline dumbbell curl': ['dumbbell', 'bench'], 'Bench-supported dumbbell row': ['dumbbell', 'bench'],
+  'Dumbbell fly': ['dumbbell'], 'Single-arm dumbbell row': ['dumbbell'], 'Seated dumbbell shoulder press': ['dumbbell'], 'Dumbbell lateral raises': ['dumbbell'], 'Dumbbell rear delt fly': ['dumbbell'],
+  'Dumbbell curls': ['dumbbell'], 'Hammer curls': ['dumbbell'], 'Overhead triceps extension': ['dumbbell'], 'Goblet squat': ['dumbbell'], 'Bulgarian split squat': ['dumbbell'],
+  'Walking lunge': ['dumbbell'], 'Step-up': ['dumbbell'], 'Dumbbell Romanian deadlift': ['dumbbell'],
+};
+const homeNeeds = e => HOME_NEEDS[e.name] ?? (GYM_LIBRARY.includes(e) ? null : e.equip === 'bodyweight' ? [] : [e.equip]);
+const canDoAtHome = (e, gear) => { const needs = homeNeeds(e); return !!needs && needs.every(n => gear[n]); };
+// Heaviest and most effective options first, bodyweight as the fallback.
+const GEAR_RANK = { pullup: 0, barbell: 1, dips: 1, dumbbell: 2, kettlebell: 3, band: 4, bench: 5 };
+const homeRank = e => Math.min(6, ...homeNeeds(e).map(n => GEAR_RANK[n] ?? 6));
 function homeOptions(name, primary, gear) {
   const me = libEntry(name);
   const fit = LIBRARY.filter(e => canDoAtHome(e, gear));
   const same = me ? fit.filter(e => e.pattern === me.pattern) : [];
   const also = fit.filter(e => e.p === (me?.p || primary) && !same.includes(e));
-  const byGear = (a, b) => GEAR_RANK[a.equip] - GEAR_RANK[b.equip];
+  const byGear = (a, b) => homeRank(a) - homeRank(b);
   return [...same.sort(byGear), ...also.sort(byGear)];
 }
 function homeDay(rows, gear, choices = {}) {
@@ -195,7 +228,8 @@ function homeDay(rows, gear, choices = {}) {
     const me = libEntry(r.name);
     const samePattern = options.filter(o => o.pattern === me?.pattern);
     const free = (samePattern.length ? samePattern : options).find(o => !out.some(x => x.name === o.name));
-    const pick = (choices[r.name] && libEntry(choices[r.name])) || free || samePattern[0] || options[0];
+    const mine = choices[r.name] && libEntry(choices[r.name]);
+    const pick = (mine && canDoAtHome(mine, gear) ? mine : null) || free || samePattern[0] || options[0];
     if (!pick) { out.push({ ...r }); return; }
     // Two gym exercises can share one home move, so its sets add up instead of listing it twice.
     const already = out.find(x => x.name === pick.name);

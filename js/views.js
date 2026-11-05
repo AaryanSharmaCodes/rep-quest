@@ -187,7 +187,7 @@ function viewToday() {
   }).join('');
   // Weighing in is already a quest, so it doesn't need a second reminder here.
   const advice = adviceList().filter(x => x.id !== 'weigh').slice(0, 2);
-  const startBtn = !a && plan && !trained.length ? `${placeSeg()}<button class="btn solid" data-a="startDay" data-id="${plan.id}">Start ${esc(plan.name)}</button>` : '';
+  const startBtn = !a && plan && !trained.length ? `${atHome() ? homeBanner(plan.id) : ''}<button class="btn solid" data-a="startDay" data-id="${plan.id}">Start ${esc(plan.name)}${atHome() ? ' at home' : ''}</button>${atHome() ? '' : homeButton(plan.id)}` : '';
   return `
   <header class="top">
     <div><h1>${date.toLocaleDateString('en-IN', { weekday: 'long' })}</h1><p class="dim">${shortDate(k)}${s.streak > 1 ? `, ${s.streak}-day streak` : ''}</p></div>
@@ -206,13 +206,13 @@ function viewToday() {
 /* ---------- Train ---------- */
 function targetFor(e) { return suggestNext(e, exerciseHistory(state.workouts, e.name, 6)); }
 function viewTrain() { return state.active ? viewActive() : viewPlan(); }
-// Gym or home: asked every time you pick a workout.
-function placeSeg() {
-  const place = state.settings.place, g = state.settings.homeGear;
-  const gear = ['Bodyweight', g.dumbbell && 'dumbbells', g.band && 'bands'].filter(Boolean).join(', ');
-  return `<div class="seg place" role="group" aria-label="Where are you training?">${[['gym', 'Gym'], ['home', 'Home']].map(([v, l]) => `<button class="${place === v ? 'on' : ''}" data-a="setPlace" data-v="${v}" aria-pressed="${place === v}">${l}</button>`).join('')}</div>
-    ${place === 'home' ? `<button class="link gear-link" data-a="openSheet" data-type="homeGear">Home gear: ${esc(gear)} ${i('next')}</button>` : ''}`;
-}
+// The normal workout, with the option of swapping it for a home version.
+const gearSummary = () => {
+  const list = HOME_GEAR.filter(([k]) => state.settings.homeGear[k]).map(([, l]) => l);
+  return list.length ? list.join(', ') : 'Bodyweight only';
+};
+const homeButton = dayId => `<button class="btn line home-btn" data-a="homeInstead" data-id="${dayId}">${i('today')} Do home workout instead</button>`;
+const homeBanner = dayId => `<div class="home-on"><span><b>Home workout</b><em>${esc(gearSummary())}</em></span><button class="link strong" data-a="homeInstead" data-id="${dayId}">Equipment</button><button class="link" data-a="backToGym">Back to gym</button></div>`;
 const homeRows = day => homeDay(day.exercises, state.settings.homeGear, state.homeChoice);
 function nextWorkoutLine() {
   for (let n = 1; n <= 7; n++) {
@@ -238,7 +238,7 @@ function viewPlan() {
   const scheduled = dayId ? findDay(dayId) : null;
   const trainedToday = workoutsOn(today());
   const doneToday = trainedToday.length > 0;
-  const isHome = state.settings.place === 'home';
+  const isHome = atHome();
   const day = scheduled && isHome && !doneToday ? { ...scheduled, exercises: homeRows(scheduled) } : scheduled;
   const strip = WEEK_ORDER.map(wd => {
     const id = p.schedule[wd], dd = id ? findDay(id) : null;
@@ -252,7 +252,7 @@ function viewPlan() {
       const lastLine = last ? `Last: ${esc(lastTimeText(last.sets, e.unit))}` : '';
       return `<li><button data-a="openSheet" data-type="lift" data-name="${esc(e.name)}"><span class="pl-name">${esc(e.name)}</span><span class="pl-sub">${e.sets} × ${e.lo} to ${e.hi}${e.unit === 'sec' ? ' s' : ''}</span>${lastLine ? `<span class="pl-next pl-last">${lastLine}</span>` : ''}<span class="pl-next">${n.w ? `${esc(n.headline)}: ${round(n.w, 2)} kg` : esc(n.headline)}</span></button></li>`;
     }).join('')}</ol>
-    ${doneToday ? '' : `<button class="btn solid wide" data-a="startDay" data-id="${day.id}">${inDeload() ? 'Start lighter session' : 'Start workout'}</button>`}
+    ${doneToday ? '' : `<button class="btn solid wide" data-a="startDay" data-id="${day.id}">${inDeload() ? 'Start lighter session' : isHome ? 'Start home workout' : 'Start workout'}</button>${isHome ? '' : homeButton(day.id)}`}
   ` : `<div class="session-head"><div><h2>Rest day</h2><p class="dim">Eat normally, recover.</p></div></div>
        ${doneToday ? '' : '<button class="btn line wide" data-a="openSheet" data-type="schedule">Put a workout on this day</button>'}`;
   const showDone = doneToday && sel === new Date().getDay();
@@ -262,7 +262,7 @@ function viewPlan() {
   <header class="top"><div><h1>Train</h1><button class="crumb" data-a="openSheet" data-type="programs">${esc(p.name)} ${i('next')}</button></div></header>
   ${inDeload() ? `<p class="banner">Lighter week until ${shortDate(state.deloadUntil)}: half the sets, 10% less weight. <button class="link strong" data-a="endDeload">End it</button></p>` : ''}
   <div class="dstrip">${strip}</div>
-  ${showDone ? doneCard(trainedToday) : `${doneToday ? '' : placeSeg()}${body}`}
+  ${showDone ? doneCard(trainedToday) : `${isHome && !doneToday && day ? homeBanner(day.id) : ''}${body}`}
   ${doneToday ? '' : `<section class="block"><h2>Train something else</h2>
     <div class="pills">${others.map(d => `<button class="pill" data-a="startDay" data-id="${d.id}">${esc(d.name)}</button>`).join('')}<button class="pill" data-a="startEmpty">Empty workout</button></div></section>`}
   <section class="block"><h2>Cardio</h2>

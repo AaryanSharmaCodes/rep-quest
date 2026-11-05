@@ -172,7 +172,7 @@ function rowsToActive(rows, deload) {
 }
 function startWorkout(day) {
   const deload = inDeload();
-  const place = state.settings.place === 'home' && day ? 'home' : 'gym';
+  const place = atHome() && day ? 'home' : 'gym';
   // A home version isn't a plan row, so changes to it never touch the gym plan.
   const exercises = !day ? [] : place === 'home' ? rowsToActive(homeRows(day), deload).map(e => ({ ...e, planRow: undefined })) : rowsToActive(day.exercises, deload);
   state.active = { id: uid(), date: today(), name: day ? day.name : 'Workout', dayId: day?.id || null, place, startedAt: Date.now(), deload, exercises };
@@ -377,12 +377,26 @@ const A = {
     render();
     window.scrollTo(0, 0);
   },
-  setPlace(d) {
-    state.settings.place = d.v;
-    ui.enter = false;
+  homeInstead(d) { A.openSheet({ type: 'homeGear', id: d.id }); },
+  toggleGear(d, el) {
+    state.settings.homeGear[d.k] = !state.settings.homeGear[d.k];
+    haptic();
+    Motion.after(() => { Motion.pop(document.querySelector(`.gear-chip[data-k="${d.k}"]`), 1.06); Motion.stagger('.gear-preview > li'); });
+    commit();
+  },
+  useHome() {
+    state.settings.place = 'home';
+    state.settings.placeOn = today();
+    ui.sheet = null;
+    ui.sheetStack = [];
     haptic();
     Motion.after(() => Motion.stagger('.plan-list > li'));
-    if (d.v === 'home' && !state.settings.homeAsked) A.openSheet({ type: 'homeGear' });
+    commit();
+  },
+  backToGym() {
+    state.settings.place = 'gym';
+    haptic();
+    Motion.after(() => Motion.stagger('.plan-list > li'));
     commit();
   },
   setTheme(d, el) { Motion.switchTheme(d.v, el); },
@@ -909,7 +923,6 @@ const FIELD = {
     scheduleSave();
   },
   setting(d, el) { state.settings[d.k] = el.checked; scheduleSave(); if (d.k === 'animations') Motion.refresh(); },
-  gear(d, el) { state.settings.homeGear[d.k] = el.checked; scheduleSave(); },
   liftChart(d, el) { ui.liftChart = el.value; render(); },
   targetCheck() { refreshMacroSum(); },
 };

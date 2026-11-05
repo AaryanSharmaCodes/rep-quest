@@ -4,7 +4,7 @@
 // Firebase's REST APIs keep this small: its SDK leans on helper pages that iPhone Safari's storage rules can block.
 
 // These identify the project and are safe to publish. The database rules are what keep each person's data private.
-const FIREBASE = { apiKey: '', projectId: '', googleClientId: '' };
+const FIREBASE = { apiKey: 'AIzaSyDIBJLC2g_GTUlF6af97T__Bxa3kWknhxQ', projectId: 'rep-quest-f487f', googleClientId: '895874315091-ovqa189pji0j6r5bhq94en5hptvrk6ab.apps.googleusercontent.com' };
 
 const Cloud = (() => {
   const AUTH_KEY = 'rq-auth', SYNC_KEY = 'rq-sync', NONCE_KEY = 'rq-nonce';

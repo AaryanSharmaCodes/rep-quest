@@ -57,7 +57,7 @@ function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(writeS
 function flushSave() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; writeSave(); } }
 
 /* ---------- State ---------- */
-const APP_VERSION = 5; // matches CACHE in sw.js
+const APP_VERSION = 6; // matches CACHE in sw.js
 const THEMES = [
   { id: 'game', name: 'Quest', bar: '#170e33', fx: ['#b78eff', '#dfceff', '#ffffff', '#7f5cff'], shapes: ['star', 'circle'], burst: 1 },
   { id: 'light', name: 'Minimal', bar: '#f7f7f4', fx: ['#17171a', '#8a8a8e', '#c9c9c5'], shapes: ['circle'], burst: 0.6 },
@@ -85,7 +85,7 @@ function defaultState() {
     homeChoice: {},
     deloadUntil: null,
     dismissed: {},
-    settings: { usdaKey: '', sound: true, showRir: false, showWaist: false, theme: 'game', animations: true, place: 'gym', homeGear: { dumbbell: false, band: false }, homeAsked: false },
+    settings: { usdaKey: '', sound: true, showRir: false, showWaist: false, theme: 'game', animations: true, place: 'gym', placeOn: null, homeGear: {} },
     lastBackup: null,
   };
 }
@@ -160,6 +160,8 @@ const getDay = k => (state.days[k] = state.days[k] || {});
 const findDay = id => state.program.days.find(d => d.id === id) || null;
 const plannedDay = k => { const id = state.program.schedule[parseKey(k).getDay()]; return id ? findDay(id) : null; };
 const workoutsOn = k => state.workouts.filter(w => w.date === k);
+// Home is chosen per day, so the normal workout is what shows up tomorrow.
+const atHome = () => state.settings.place === 'home' && state.settings.placeOn === today();
 const inDeload = () => !!state.deloadUntil && state.deloadUntil >= today();
 
 function dayTotals(k) {

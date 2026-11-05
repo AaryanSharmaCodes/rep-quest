@@ -211,15 +211,15 @@ const SHEETS = {
       <button class="link danger block-link" data-a="deleteDay">Delete this workout</button>`;
   },
 
-  homeGear() {
+  homeGear(s) {
     const g = state.settings.homeGear;
-    state.settings.homeAsked = true;
-    return `${sheetHead('What do you have at home?', 'Bodyweight moves are always included')}
-      <ul class="rows">
-        <li><label class="row"><span>Dumbbells</span><input type="checkbox" class="sw" data-f="gear" data-k="dumbbell" ${g.dumbbell ? 'checked' : ''}></label></li>
-        <li><label class="row"><span>Resistance bands</span><input type="checkbox" class="sw" data-f="gear" data-k="band" ${g.band ? 'checked' : ''}></label></li>
-      </ul>
-      <button class="btn solid wide" data-a="closeAll">Done</button>`;
+    const day = findDay(s.id);
+    const rows = day ? homeRows(day) : [];
+    return `${sheetHead('What do you have at home?', 'Tap everything you own. Bodyweight moves are always included')}
+      <div class="gear-grid">${HOME_GEAR.map(([k, l]) => `<button class="gear-chip${g[k] ? ' on' : ''}" data-a="toggleGear" data-k="${k}" aria-pressed="${!!g[k]}"><span class="gear-box">${g[k] ? ICON.tick : ''}</span>${l}</button>`).join('')}</div>
+      ${rows.length ? `<h3 class="sh-sub">${esc(day.name)} at home</h3><p class="dim sm">Same muscles, using what you have.</p>
+      <ul class="gear-preview">${rows.map(r => `<li><span>${esc(r.name)}</span><em>${r.sets} × ${r.lo} to ${r.hi}${r.unit === 'sec' ? ' s' : ''}</em></li>`).join('')}</ul>` : ''}
+      <button class="btn solid wide" data-a="useHome">Use home workout</button>`;
   },
 
   /* ---------- Settings ---------- */
