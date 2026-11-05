@@ -37,7 +37,7 @@ function lineChart({ id, points, height = 190, unit = '', decimals = 1, showRaw 
   const xl = labels.map((d, i) => `<text x="${i ? W - padR : padL}" y="${H - 5}" class="c-axis" text-anchor="${i ? 'end' : 'start'}">${shortDate(d)}</text>`).join('');
   ui.charts[id] = { points, W, padL, padR, lineKey, unit, decimals, xy: points.map(p => [x(p.date), y(p[lineKey])]), H, padT, padB, first, span };
   return `<div class="chart" data-chart="${id}" style="height:${H}px">
-    <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(id)} chart with ${points.length} readings">${grid}${target}${raw}<path d="${line}" class="c-line"/>${single}${xl}<g class="c-cursor" hidden><line class="c-cross" y1="${padT}" y2="${H - padB}"/><circle r="5" class="c-dot-on"/></g></svg>
+    <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(id)} chart with ${points.length} readings">${grid}${target}${raw}<path d="${line}" class="c-line" pathLength="1"/>${single}${xl}<g class="c-cursor" hidden><line class="c-cross" y1="${padT}" y2="${H - padB}"/><circle r="5" class="c-dot-on"/></g></svg>
     <div class="c-tip" hidden></div></div>`;
 }
 function moveCursor(el, clientX) {
@@ -49,7 +49,7 @@ function moveCursor(el, clientX) {
   c.xy.forEach((p, i) => { const g = Math.abs(p[0] - px); if (g < gap) { gap = g; best = i; } });
   const p = c.points[best], [cx, cy] = c.xy[best];
   const g = el.querySelector('.c-cursor'), tip = el.querySelector('.c-tip');
-  g.hidden = false;
+  g.removeAttribute('hidden');
   g.querySelector('line').setAttribute('x1', cx);
   g.querySelector('line').setAttribute('x2', cx);
   g.querySelector('circle').setAttribute('cx', cx);
@@ -78,7 +78,7 @@ function barChart({ id, days, get, target, color = 'var(--accent)', height = 120
     const v = vals[i], bx = i * (bw + gap);
     if (!v) return `<rect x="${bx}" y="${H - padB - 2}" width="${bw}" height="2" class="c-nil" data-i="${i}"/>`;
     const top = y(v), h = H - padB - top, r = Math.min(4, bw / 2);
-    return `<path d="M${bx} ${H - padB}V${top + r}Q${bx} ${top} ${bx + r} ${top}H${bx + bw - r}Q${bx + bw} ${top} ${bx + bw} ${top + r}V${H - padB}Z" fill="${color}" opacity="${d === today() ? 1 : 0.72}"/>`;
+    return `<path d="M${bx} ${H - padB}V${top + r}Q${bx} ${top} ${bx + r} ${top}H${bx + bw - r}Q${bx + bw} ${top} ${bx + bw} ${top + r}V${H - padB}Z" fill="${color}" opacity="${d === today() ? 1 : 0.72}" class="c-bar" style="--n:${i}"/>`;
   }).join('');
   const line = target ? `<line x1="0" x2="${W - padR}" y1="${y(target)}" y2="${y(target)}" class="c-target"/><text x="${W - padR + 6}" y="${y(target) + 4}" class="c-axis">${fmt(target)}</text>` : '';
   ui.charts[id] = { bars: true, days, vals, unit, bw, gap, W, padR };

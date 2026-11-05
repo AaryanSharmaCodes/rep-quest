@@ -14,18 +14,24 @@
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="preload" href="fonts/cinzel.woff2" as="font" type="font/woff2" crossorigin>
+<script>try{var t=localStorage.getItem('rq-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<div id="statusbar"></div>
 <main id="app"></main>
 <div id="rest" hidden></div>
 <nav id="tabs" aria-label="Main"></nav>
 <div id="sheet" hidden></div>
+<div id="fx" aria-hidden="true"></div>
 <div id="toasts" role="status" aria-live="polite"></div>
+<script src="js/canvas-confetti.js"></script>
 <script src="js/util.js"></script>
 <script src="js/science.js"></script>
 <script src="js/library.js"></script>
 <script src="js/core.js"></script>
+<script src="js/cloud.js"></script>
+<script src="js/motion.js"></script>
 <script src="js/foods.js"></script>
 <script src="js/charts.js"></script>
 <script src="js/views.js"></script>

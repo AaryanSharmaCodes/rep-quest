@@ -50,13 +50,20 @@ async function writeSave() {
   }
   try { localStorage.setItem(DB_NAME, JSON.stringify(copy)); ok = true; } catch (e) { /* quota: IndexedDB still has it */ }
   if (!ok) toast('Could not save. Export a backup from the You tab.');
+  else Cloud.changed();
 }
 let saveTimer = null;
 function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(writeSave, 150); }
 function flushSave() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; writeSave(); } }
 
 /* ---------- State ---------- */
-const APP_VERSION = 4; // matches CACHE in sw.js
+const APP_VERSION = 5; // matches CACHE in sw.js
+const THEMES = [
+  { id: 'game', name: 'Quest', bar: '#170e33', fx: ['#b78eff', '#dfceff', '#ffffff', '#7f5cff'], shapes: ['star', 'circle'], burst: 1 },
+  { id: 'light', name: 'Minimal', bar: '#f7f7f4', fx: ['#17171a', '#8a8a8e', '#c9c9c5'], shapes: ['circle'], burst: 0.6 },
+  { id: 'dark', name: 'Dark', bar: '#0f0f11', fx: ['#ffffff', '#a1a1aa', '#52525b'], shapes: ['circle'], burst: 0.6 },
+  { id: 'arcade', name: 'Arcade', bar: '#0b1026', fx: ['#ffe14d', '#ff3d81', '#29e6ff', '#7cff6b'], shapes: ['square'], burst: 1.2 },
+];
 function defaultState() {
   return {
     v: 2,
@@ -75,9 +82,10 @@ function defaultState() {
     recentFoods: [],
     savedMeals: [],
     altPrefs: {},
+    homeChoice: {},
     deloadUntil: null,
     dismissed: {},
-    settings: { usdaKey: '', sound: true, showRir: false, showWaist: false },
+    settings: { usdaKey: '', sound: true, showRir: false, showWaist: false, theme: 'game', animations: true, place: 'gym', homeGear: { dumbbell: false, band: false }, homeAsked: false },
     lastBackup: null,
   };
 }
@@ -143,7 +151,7 @@ function migrate(saved) {
 let state = defaultState();
 const ui = {
   tab: 'today', openedOn: today(), foodDate: today(), logDate: today(), planDay: new Date().getDay(), sheet: null, sheetStack: [],
-  range: 90, rest: null, liftChart: null, lastCleared: {}, searchToken: 0, foodIndex: {}, foodDb: { loaded: 0, total: 0, done: false },
+  range: 90, rest: null, liftChart: null, lastCleared: {}, bars: {}, nums: {}, enter: true, searchToken: 0, foodIndex: {}, foodDb: { loaded: 0, total: 0, done: false },
   charts: {}, swapScope: 'today', foodTab: 'all', fresh: true,
 };
 

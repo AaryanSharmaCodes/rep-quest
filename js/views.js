@@ -21,6 +21,19 @@ const i = name => `<span class="ic">${ICON[name]}</span>`;
 const refLinks = keys => (keys || []).filter(k => REFS[k]).map(k => `<a class="ref" href="https://doi.org/${REFS[k].doi}" target="_blank" rel="noopener">${esc(REFS[k].who)}</a>`).join(' ');
 const fmtKg = w => (w === 0 || w == null ? 'BW' : `${round(w, 2)}`);
 const setText = (s, unit) => (unit === 'sec' ? `${s.w ? fmtKg(s.w) + ' kg × ' : ''}${s.r} s` : `${fmtKg(s.w)}${s.w ? ' kg' : ''} × ${s.r}`);
+const GOOGLE_G = '<svg class="g-mark" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.600-.2-2.300H12v4.500h6.500a5.500 5.500 0 0 1-2.400 3.600v3h3.900c2.300-2.100 3.500-5.200 3.500-8.800z"/><path fill="#34A853" d="M12 24c3.200 0 6-1.100 8-2.900l-3.900-3a7.200 7.200 0 0 1-10.800-3.800h-4v3.100A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.300 14.300a7.200 7.200 0 0 1 0-4.600V6.600h-4a12 12 0 0 0 0 10.800z"/><path fill="#EA4335" d="M12 4.800c1.800 0 3.300.6 4.600 1.800l3.400-3.400A12 12 0 0 0 1.300 6.600l4 3.100A7.200 7.200 0 0 1 12 4.800z"/></svg>';
+// "40 kg × 9, 8, 8" when the weight stayed the same, otherwise each set in full.
+function lastTimeText(sets, unit) {
+  const work = sets.filter(isWorking);
+  if (!work.length) return '';
+  if (new Set(work.map(s => s.w)).size > 1) return work.map(s => setText(s, unit)).join(', ');
+  const w = work[0].w, reps = work.map(s => s.r).join(', ');
+  return `${w ? `${round(w, 2)} kg × ` : ''}${reps}${unit === 'sec' ? ' s' : w ? '' : ' reps'}`;
+}
+function daysAgo(k) {
+  const n = daysBetween(k, today());
+  return n <= 0 ? 'earlier today' : n === 1 ? 'yesterday' : `${n} days ago`;
+}
 const unitWord = e => (e.unit === 'sec' ? 'sec' : 'reps');
 const repRange = e => `${e.lo} to ${e.hi} ${unitWord(e)}`;
 
@@ -94,7 +107,7 @@ function adviceList() {
   if (sleep.length >= 4 && avg(sleep) < 7) add({ id: 'sleep', title: `Sleep is averaging ${round(avg(sleep), 1)} h`, body: `Your plan asks for ${tg.sleep} to 9 hours. Recovery shows up in your lifts before anywhere else.` });
 
   if (!state.dismissed.creatine) add({ id: 'creatine', title: 'Creatine is the one supplement your plan prioritises', body: '3 to 5 g every day, including rest days. You can log it as a food to remember it.', refs: ['kreider17'], once: true });
-  const backedUp = state.lastBackup ? daysBetween(state.lastBackup, now) : 999;
+  const backedUp = Cloud.user() ? 0 : state.lastBackup ? daysBetween(state.lastBackup, now) : 999;
   if (backedUp >= 14 && (state.workouts.length || Object.keys(state.days).length > 3)) add({ id: 'backup', title: 'Save a backup', body: 'Your data lives only on this phone. Keep a copy in Files or iCloud Drive.', action: ['Save backup', 'exportData', {}] });
   return list;
 }
@@ -123,7 +136,7 @@ function questCard(q, info, fresh) {
     <span class="q-main"><span class="q-name">${info.label}</span><span class="q-sub">${info.sub}</span></span>
     <span class="q-val">[${info.value}]</span>
     <span class="q-mark">${q.done ? i('tick') : i('next')}</span>
-    ${pct != null && !q.done ? `<i class="q-fill" style="width:${pct * 100}%"></i>` : ''}
+    ${pct != null && !q.done ? `<i class="q-fill" data-k="q-${q.id}" data-pct="${pct * 100}" style="width:${pct * 100}%"></i>` : ''}
   </button></li>`;
 }
 function viewToday() {
@@ -131,8 +144,10 @@ function viewToday() {
   const prev = ui.lastCleared[k];
   const fresh = prev ? cleared.filter(q => !prev.includes(q.id)).map(q => q.id) : [];
   ui.lastCleared[k] = cleared.map(q => q.id);
-  if (fresh.length) setTimeout(playClang, 120);
-  const s = computeStats(), d = peekDay(k), t = dayTotals(k), tg = state.targets;
+  if (fresh.length) { setTimeout(playClang, 120); Motion.after(() => Motion.questCleared(open.length === 0)); }
+  const s = computeStats();
+  Motion.after(() => Motion.checkLevel(s.level));
+  const d = peekDay(k), t = dayTotals(k), tg = state.targets;
   const plan = plannedDay(k), trained = workoutsOn(k), a = state.active;
   const date = parseKey(k);
   const setsDone = a ? sum(a.exercises.map(e => e.sets.filter(x => x.done && isWorking(x)).length)) : 0;
@@ -172,58 +187,88 @@ function viewToday() {
   }).join('');
   // Weighing in is already a quest, so it doesn't need a second reminder here.
   const advice = adviceList().filter(x => x.id !== 'weigh').slice(0, 2);
-  const startBtn = !a && plan && !trained.length ? `<button class="btn solid wide" data-a="startDay" data-id="${plan.id}">Start ${esc(plan.name)}</button>` : '';
+  const startBtn = !a && plan && !trained.length ? `${placeSeg()}<button class="btn solid" data-a="startDay" data-id="${plan.id}">Start ${esc(plan.name)}</button>` : '';
   return `
   <header class="top">
     <div><h1>${date.toLocaleDateString('en-IN', { weekday: 'long' })}</h1><p class="dim">${shortDate(k)}${s.streak > 1 ? `, ${s.streak}-day streak` : ''}</p></div>
     <button class="level" data-a="go" data-tab="you" aria-label="Level ${s.level}"><b>${s.level}</b><span>Level</span></button>
   </header>
-  <div class="xp"><div class="xp-track"><i style="width:${s.into / s.need * 100}%"></i></div><p>${fmt(s.into)} / ${fmt(s.need)} XP</p></div>
+  <div class="xp"><div class="xp-track"><i data-k="xp" data-pct="${s.into / s.need * 100}" style="width:${s.into / s.need * 100}%"></i></div><p>${fmt(s.into)} / ${fmt(s.need)} XP</p></div>
   <section class="block first">
     <div class="q-head"><h2>Daily Quests</h2><span class="q-count">[${cleared.length} / ${quests.length}]</span></div>
     ${open.length ? `<ul class="quests">${open.map(q => questCard(q, info[q.id], fresh)).join('')}</ul>` : '<p class="all-clear">All quests cleared today.</p>'}
-    ${startBtn}
+    ${startBtn ? `<div class="start-box">${startBtn}</div>` : ''}
   </section>
   ${cleared.length ? `<section class="block"><h2>Completed</h2><ul class="quests">${cleared.map(q => questCard(q, info[q.id], fresh)).join('')}</ul></section>` : ''}
-  <section class="block"><div class="week">${week}</div></section>
-  ${advice.length ? `<section class="block"><h2>Next up</h2><ul class="advice">${advice.map(adviceRow).join('')}</ul></section>` : ''}`;
+  <section class="block"><div class="week">${week}</div></section>`;
 }
 
 /* ---------- Train ---------- */
 function targetFor(e) { return suggestNext(e, exerciseHistory(state.workouts, e.name, 6)); }
 function viewTrain() { return state.active ? viewActive() : viewPlan(); }
+// Gym or home: asked every time you pick a workout.
+function placeSeg() {
+  const place = state.settings.place, g = state.settings.homeGear;
+  const gear = ['Bodyweight', g.dumbbell && 'dumbbells', g.band && 'bands'].filter(Boolean).join(', ');
+  return `<div class="seg place" role="group" aria-label="Where are you training?">${[['gym', 'Gym'], ['home', 'Home']].map(([v, l]) => `<button class="${place === v ? 'on' : ''}" data-a="setPlace" data-v="${v}" aria-pressed="${place === v}">${l}</button>`).join('')}</div>
+    ${place === 'home' ? `<button class="link gear-link" data-a="openSheet" data-type="homeGear">Home gear: ${esc(gear)} ${i('next')}</button>` : ''}`;
+}
+const homeRows = day => homeDay(day.exercises, state.settings.homeGear, state.homeChoice);
+function nextWorkoutLine() {
+  for (let n = 1; n <= 7; n++) {
+    const k = addDays(today(), n), day = plannedDay(k);
+    if (day) return `Next: ${esc(day.name)}, ${n === 1 ? 'tomorrow' : parseKey(k).toLocaleDateString('en-IN', { weekday: 'long' })}.`;
+  }
+  return '';
+}
+function doneCard(list) {
+  const sets = sum(list.flatMap(w => w.exercises.map(e => e.sets.filter(isWorking).length)));
+  const kg = sum(list.flatMap(w => w.exercises.flatMap(e => e.sets.filter(isWorking).map(x => (x.w || 0) * (x.r || 0)))));
+  const bests = sum(list.map(w => (w.prs || []).length));
+  const w = list[list.length - 1];
+  return `<section class="card done-card"><span class="done-mark">${ICON.tick}</span><h2>Done for the day</h2>
+    <p class="dim">${esc(w.name)}${w.place === 'home' ? ' at home' : ''}: ${sets} sets${kg ? `, ${fmt(kg)} kg lifted` : ''}${bests ? `, ${bests} new ${bests === 1 ? 'best' : 'bests'}` : ''}.</p>
+    <p class="dim">${nextWorkoutLine()}</p>
+    <button class="link strong" data-a="openSheet" data-type="workout" data-id="${w.id}">See workout</button></section>`;
+}
 function viewPlan() {
   const p = state.program;
   const sel = ui.planDay;
   const dayId = p.schedule[sel];
-  const day = dayId ? findDay(dayId) : null;
+  const scheduled = dayId ? findDay(dayId) : null;
+  const trainedToday = workoutsOn(today());
+  const doneToday = trainedToday.length > 0;
+  const isHome = state.settings.place === 'home';
+  const day = scheduled && isHome && !doneToday ? { ...scheduled, exercises: homeRows(scheduled) } : scheduled;
   const strip = WEEK_ORDER.map(wd => {
     const id = p.schedule[wd], dd = id ? findDay(id) : null;
     return `<button class="dpick${wd === sel ? ' on' : ''}${wd === new Date().getDay() ? ' tod' : ''}" data-a="pickDay" data-d="${wd}"><b>${DAY_SHORT[wd]}</b><span>${dd ? esc(dd.name.split(/[ ,]/)[0]) : 'Rest'}</span></button>`;
   }).join('');
   const body = day ? `
     <div class="session-head"><div><h2>${esc(day.name)}</h2><p class="dim">${day.exercises.length} exercises, ${sum(day.exercises.map(e => e.sets))} sets, about ${Math.round(sum(day.exercises.map(e => e.sets * (e.rest + 45))) / 60)} min</p></div>
-      <button class="link strong" data-a="openSheet" data-type="dayEdit" data-id="${day.id}">Edit</button></div>
+      ${isHome && !doneToday ? '' : `<button class="link strong" data-a="openSheet" data-type="dayEdit" data-id="${day.id}">Edit</button>`}</div>
     <ol class="plan-list">${day.exercises.map(e => {
-      const n = targetFor(e);
-      return `<li><button data-a="openSheet" data-type="lift" data-name="${esc(e.name)}"><span class="pl-name">${esc(e.name)}</span><span class="pl-sub">${e.sets} × ${e.lo} to ${e.hi}${e.unit === 'sec' ? ' s' : ''}</span><span class="pl-next">${n.w ? `${esc(n.headline)}: ${round(n.w, 2)} kg` : esc(n.headline)}</span></button></li>`;
+      const n = targetFor(e), last = exerciseHistory(state.workouts, e.name, 1)[0];
+      const lastLine = last ? `Last: ${esc(lastTimeText(last.sets, e.unit))}` : '';
+      return `<li><button data-a="openSheet" data-type="lift" data-name="${esc(e.name)}"><span class="pl-name">${esc(e.name)}</span><span class="pl-sub">${e.sets} × ${e.lo} to ${e.hi}${e.unit === 'sec' ? ' s' : ''}</span>${lastLine ? `<span class="pl-next pl-last">${lastLine}</span>` : ''}<span class="pl-next">${n.w ? `${esc(n.headline)}: ${round(n.w, 2)} kg` : esc(n.headline)}</span></button></li>`;
     }).join('')}</ol>
-    <button class="btn solid wide" data-a="startDay" data-id="${day.id}">${inDeload() ? 'Start lighter session' : 'Start workout'}</button>
+    ${doneToday ? '' : `<button class="btn solid wide" data-a="startDay" data-id="${day.id}">${inDeload() ? 'Start lighter session' : 'Start workout'}</button>`}
   ` : `<div class="session-head"><div><h2>Rest day</h2><p class="dim">Eat normally, recover.</p></div></div>
-       <button class="btn line wide" data-a="openSheet" data-type="schedule">Put a workout on this day</button>`;
+       ${doneToday ? '' : '<button class="btn line wide" data-a="openSheet" data-type="schedule">Put a workout on this day</button>'}`;
+  const showDone = doneToday && sel === new Date().getDay();
   const others = p.days.filter(d => d.id !== dayId);
   const recent = state.workouts.slice(-8).reverse();
   return `
   <header class="top"><div><h1>Train</h1><button class="crumb" data-a="openSheet" data-type="programs">${esc(p.name)} ${i('next')}</button></div></header>
   ${inDeload() ? `<p class="banner">Lighter week until ${shortDate(state.deloadUntil)}: half the sets, 10% less weight. <button class="link strong" data-a="endDeload">End it</button></p>` : ''}
   <div class="dstrip">${strip}</div>
-  ${body}
-  <section class="block"><h2>Train something else</h2>
-    <div class="pills">${others.map(d => `<button class="pill" data-a="startDay" data-id="${d.id}">${esc(d.name)}</button>`).join('')}<button class="pill" data-a="startEmpty">Empty workout</button></div></section>
+  ${showDone ? doneCard(trainedToday) : `${doneToday ? '' : placeSeg()}${body}`}
+  ${doneToday ? '' : `<section class="block"><h2>Train something else</h2>
+    <div class="pills">${others.map(d => `<button class="pill" data-a="startDay" data-id="${d.id}">${esc(d.name)}</button>`).join('')}<button class="pill" data-a="startEmpty">Empty workout</button></div></section>`}
   <section class="block"><h2>Cardio</h2>
     <button class="row" data-a="openSheet" data-type="log"><span>Incline walk or other cardio</span><span class="dim">${peekDay(today()).cardio ? `${peekDay(today()).cardio} min today` : 'Log minutes'}</span></button></section>
   <section class="block"><h2>History</h2>
-    ${recent.length ? `<ul class="rows">${recent.map(w => `<li><button class="row" data-a="openSheet" data-type="workout" data-id="${w.id}"><span>${esc(w.name)}<em>${niceDate(w.date)}</em></span><span class="dim">${sum(w.exercises.map(e => e.sets.filter(isWorking).length))} sets${w.prs?.length ? `, ${w.prs.length} new best` : ''}</span></button></li>`).join('')}</ul>` : '<p class="empty">Your finished workouts land here.</p>'}
+    ${recent.length ? `<ul class="rows">${recent.map(w => `<li><button class="row" data-a="openSheet" data-type="workout" data-id="${w.id}"><span>${esc(w.name)}<em>${niceDate(w.date)}${w.place === 'home' ? ', home' : ''}</em></span><span class="dim">${sum(w.exercises.map(e => e.sets.filter(isWorking).length))} sets${w.prs?.length ? `, ${w.prs.length} new best` : ''}</span></button></li>`).join('')}</ul>` : '<p class="empty">Your finished workouts land here.</p>'}
   </section>`;
 }
 
@@ -234,8 +279,8 @@ function viewActive() {
   return `
   <header class="work-top">
     <div><h1>${esc(a.name)}</h1><p class="dim"><span id="clock">0 min</span>, ${done} of ${total} sets</p></div>
-    <button class="btn solid small" data-a="finishWorkout">Finish</button>
-    <i class="work-prog" style="width:${total ? done / total * 100 : 0}%"></i>
+    <button class="btn solid small${total && done === total ? ' pulse' : ''}" data-a="finishWorkout">Finish</button>
+    <i class="work-prog" data-k="work" data-pct="${total ? done / total * 100 : 0}" style="width:${total ? done / total * 100 : 0}%"></i>
   </header>
   ${a.exercises.map((e, ei) => exerciseBlock(e, ei)).join('') || '<p class="empty">Add your first exercise below.</p>'}
   <div class="work-foot">
@@ -261,7 +306,7 @@ function exerciseBlock(e, ei) {
     const tag = s.type === 'warmup' ? 'W' : s.type === 'drop' ? 'D' : s.type === 'failure' ? 'F' : wIdx + 1;
     return `<tr class="${s.done ? 'set-done' : ''}">
       <td><button class="set-tag t-${s.type || 'work'}" data-a="cycleType" data-i="${ei}" data-j="${si}" aria-label="Set type">${tag}</button></td>
-      <td class="prev">${prev ? `${prev.w ? round(prev.w, 2) : 'BW'} × ${prev.r}` : ''}</td>
+      <td class="prev${s.done && prev && isWorking(s) && setScore({ w: Number(s.w) || 0, r: Number(s.r) || 0 }) > setScore(prev) + 0.001 ? ' beat' : ''}">${prev ? `${prev.w ? round(prev.w, 2) : 'BW'} × ${prev.r}` : ''}</td>
       <td><input inputmode="decimal" enterkeyhint="next" aria-label="Weight" value="${esc(s.w)}" placeholder="${hintW === 0 ? '' : hintW}" data-f="set" data-i="${ei}" data-j="${si}" data-k="w"></td>
       <td><input inputmode="numeric" enterkeyhint="done" aria-label="${unitWord(e)}" value="${esc(s.r)}" placeholder="${hintR}" data-f="set" data-i="${ei}" data-j="${si}" data-k="r"></td>
       ${showRir ? `<td><input inputmode="numeric" aria-label="Reps in reserve" value="${esc(s.rir ?? '')}" placeholder="${e.rirGoal ?? 2}" data-f="set" data-i="${ei}" data-j="${si}" data-k="rir"></td>` : ''}
@@ -278,6 +323,7 @@ function exerciseBlock(e, ei) {
       <button class="ic-btn" data-a="openSheet" data-type="exercise" data-i="${ei}" aria-label="Exercise options">${i('more')}</button>
     </div>
     <p class="ex-sub">${repRange(e)}${e.swappedFrom ? `, in place of ${esc(e.swappedFrom)}` : ''}${e.superset ? ', superset with next' : ''}</p>
+    ${last ? `<p class="ex-last"><span>Last time</span> <b>${esc(lastTimeText(last.sets, e.unit))}</b> <em>${daysAgo(last.date)}</em></p>` : ''}
     <p class="ex-next"><b>${esc(n.headline)}.</b> ${esc(n.why)}${n.stalled ? ' <em>Stalled for 4 sessions. A swap may help.</em>' : ''}</p>
     ${options}
     <table class="sets"><thead><tr><th>Set</th><th>Last</th><th>kg</th><th>${e.unit === 'sec' ? 'Sec' : 'Reps'}</th>${showRir ? '<th>RIR</th>' : ''}<th></th></tr></thead><tbody>${rows}</tbody></table>
@@ -290,7 +336,7 @@ function viewFood() {
   const k = ui.foodDate, t = dayTotals(k), tg = targetsOn(k);
   const meals = peekDay(k).meals || {};
   const left = tg.kcal - t.kcal;
-  const bar = (label, got, of, color) => `<div class="mac"><div class="mac-top"><span>${label}</span><span>[${Math.round(got)}<em> / ${of} g</em>]</span></div><div class="mac-track"><i style="width:${clamp(got / of * 100, 0, 100)}%;background:${color}"></i></div></div>`;
+  const bar = (label, got, of, color) => `<div class="mac"><div class="mac-top"><span>${label}</span><span>[${Math.round(got)}<em> / ${of} g</em>]</span></div><div class="mac-track"><i data-k="mac-${label}" data-pct="${clamp(got / of * 100, 0, 100)}" style="width:${clamp(got / of * 100, 0, 100)}%;background:${color}"></i></div></div>`;
   const yesterday = addDays(k, -1);
   const yMeals = peekDay(yesterday).meals || {};
   return `
@@ -300,7 +346,7 @@ function viewFood() {
     ${k < today() ? `<button class="ic-btn" data-a="foodDay" data-n="1" aria-label="Next day">${i('next')}</button>` : '<span class="ic-btn"></span>'}
   </div></header>
   <section class="hero left">
-    <p class="big-num"><b data-count="${Math.abs(Math.round(left))}">${fmt(Math.abs(left))}</b></p>
+    <p class="big-num"><b data-count="${Math.abs(Math.round(left))}" data-k="kcal-left">${fmt(Math.abs(left))}</b></p>
     <p class="dim">${left >= 0 ? 'kcal left' : 'kcal over'} of ${fmt(tg.kcal)}</p>
     ${bar('Protein', t.p, tg.protein, 'var(--protein)')}${bar('Carbs', t.c, tg.carbs, 'var(--carbs)')}${bar('Fat', t.f, tg.fat, 'var(--fat)')}
   </section>
@@ -309,7 +355,7 @@ function viewFood() {
     const kcal = sum(list.map(e => e.kcal)), p = sum(list.map(e => e.p));
     const saved = state.savedMeals.filter(m => m.slot === slot).slice(0, 2);
     const y = yMeals[slot] || [];
-    return `<section class="meal">
+    return `<section class="meal" data-slot="${slot}">
       <div class="meal-head"><h2>${name}</h2><span class="dim">${list.length ? `${fmt(kcal)} kcal, ${Math.round(p)} g protein` : ''}</span></div>
       ${list.length ? `<ul class="rows">${list.map(e => `<li><button class="row" data-a="openSheet" data-type="entry" data-slot="${slot}" data-id="${e.id}"><span>${esc(e.name)}<em>${esc(e.amount || e.label || '')}</em></span><span class="dim">${fmt(e.kcal)}</span></button></li>`).join('')}</ul>` : ''}
       <div class="meal-acts">
@@ -324,7 +370,6 @@ function viewFood() {
 /* ---------- Progress ---------- */
 function viewProgress() {
   const range = ui.range;
-  const allW = series('weight', range || 0);
   const trended = weightTrend(series('weight', 0));
   const shown = range ? trended.filter(p => p.date >= addDays(today(), -range)) : trended;
   const now = shown[shown.length - 1];
@@ -344,6 +389,8 @@ function viewProgress() {
   liftPts.forEach(p => { liftByDate[p.date] = Math.max(liftByDate[p.date] || 0, p.v); });
   const liftSeries = Object.entries(liftByDate).map(([date, v]) => ({ date, v }));
   const waist = series('waist', 0);
+  // Weighing in is a daily quest and the coach has its own panel, so neither repeats here.
+  const tips = adviceList().filter(x => !['weigh', 'coach', 'review'].includes(x.id)).slice(0, 4);
 
   return `
   <header class="top"><div><h1>Progress</h1></div><button class="btn line small" data-a="openSheet" data-type="weight">Log weight</button></header>
@@ -355,6 +402,7 @@ function viewProgress() {
     <p class="legend"><i class="lg-line"></i> Trend <i class="lg-dot"></i> Scale readings</p>
   </section>
   ${coachPanel(c)}
+  ${tips.length ? `<section class="block"><h2>Recommendations</h2><ul class="advice">${tips.map(adviceRow).join('')}</ul></section>` : ''}
   <section class="block card"><h2>This week's sets by muscle</h2>
     <p class="dim sm">Direct sets count as 1, indirect as 0.5. Aim for ${goal.lo} to ${goal.hi}. ${refLinks(['schoenfeld17', 'pelland26'])}</p>
     <ul class="volume">${MUSCLE_ORDER.map(m => {
@@ -407,8 +455,9 @@ function viewYou() {
   const backup = state.lastBackup ? `Last saved ${niceDate(state.lastBackup)}` : 'Not saved yet';
   return `
   <header class="top"><div><h1>${esc(p.name || 'You')}</h1><p class="dim">Level ${s.level}, ${fmt(s.xp)} XP in total</p></div></header>
-  <div class="level-track"><i style="width:${s.into / s.need * 100}%"></i></div>
-  <dl class="tally"><div><dd>${s.workouts}</dd><dt>Workouts</dt></div><div><dd>${s.prs}</dd><dt>New bests</dt></div><div><dd>${(s.volume / 1000).toFixed(1)}</dd><dt>Tonnes lifted</dt></div><div><dd>${s.clearedDays}</dd><dt>Days cleared</dt></div></dl>
+  <div class="level-track"><i data-k="level" data-pct="${s.into / s.need * 100}" style="width:${s.into / s.need * 100}%"></i></div>
+  <dl class="tally"><div><dd data-count="${s.workouts}" data-k="t-workouts">${s.workouts}</dd><dt>Workouts</dt></div><div><dd data-count="${s.prs}" data-k="t-prs">${s.prs}</dd><dt>New bests</dt></div><div><dd>${(s.volume / 1000).toFixed(1)}</dd><dt>Tonnes lifted</dt></div><div><dd data-count="${s.clearedDays}" data-k="t-days">${s.clearedDays}</dd><dt>Days cleared</dt></div></dl>
+  <section class="block"><h2>Theme</h2><div class="themes">${THEMES.map(t => `<button class="theme-card${state.settings.theme === t.id ? ' on' : ''}" data-a="setTheme" data-v="${t.id}" aria-pressed="${state.settings.theme === t.id}"><span class="tc tc-${t.id}"><i></i><i></i><i></i></span><b>${t.name}</b></button>`).join('')}</div></section>
   <section class="block"><h2>Plan</h2><ul class="rows">
     <li><button class="row" data-a="openSheet" data-type="targets"><span>Daily targets</span><span class="dim">${fmt(t.kcal)} kcal, ${t.protein} g protein</span></button></li>
     <li><button class="row" data-a="openSheet" data-type="goal"><span>Goal</span><span class="dim">${esc(GOALS[state.goal.mode].label)}</span></button></li>
@@ -419,12 +468,16 @@ function viewYou() {
   <section class="block"><h2>Options</h2><ul class="rows">
     <li><label class="row"><span>Log reps in reserve</span><input type="checkbox" class="sw" data-f="setting" data-k="showRir" ${state.settings.showRir ? 'checked' : ''}></label></li>
     <li><label class="row"><span>Track waist too</span><input type="checkbox" class="sw" data-f="setting" data-k="showWaist" ${state.settings.showWaist ? 'checked' : ''}></label></li>
+    <li><label class="row"><span>Animations</span><input type="checkbox" class="sw" data-f="setting" data-k="animations" ${state.settings.animations !== false ? 'checked' : ''}></label></li>
     <li><label class="row"><span>Sounds</span><input type="checkbox" class="sw" data-f="setting" data-k="sound" ${state.settings.sound ? 'checked' : ''}></label></li>
   </ul></section>
-  <section class="block"><h2>Your data</h2><ul class="rows">
-    <li><button class="row" data-a="exportData"><span>Save backup</span><span class="dim">${backup}</span></button></li>
-    <li><button class="row" data-a="importData"><span>Restore from backup</span></button></li>
-  </ul><input type="file" id="restore-file" accept="application/json,.json" hidden></section>
+  <section class="block"><h2>Your data</h2>
+    ${Cloud.expired() ? `<button class="btn google" data-a="cloudSignIn">${GOOGLE_G} Continue with Google</button><p class="dim sm cloud-note">Your sign-in has expired. Everything is safe on this phone and uploads once you are back in.</p>` : ''}
+    ${Cloud.user() ? `<ul class="rows"><li><div class="row"><span>${esc(Cloud.user().email)}<em id="cloud-status">${esc(Cloud.statusText())}</em></span></div></li>
+      <li><button class="row" data-a="cloudSignOut"><span>Sign out</span></button></li></ul>`
+    : `${Cloud.enabled() ? `<button class="btn google" data-a="cloudSignIn">${GOOGLE_G} Continue with Google</button><p class="dim sm cloud-note">Saves your data to your Google account, so it follows you to any phone.</p>` : ''}
+      <ul class="rows"><li><button class="row" data-a="exportData"><span>Save backup</span><span class="dim">${backup}</span></button></li>
+      <li><button class="row" data-a="importData"><span>Restore from backup</span></button></li></ul><input type="file" id="restore-file" accept="application/json,.json" hidden>`}</section>
   <section class="block"><h2>Food database</h2>
     <p class="dim sm">${db.total ? `${fmt(db.loaded)} of ${fmt(db.total)} foods ready on this phone${db.done ? ', and they work offline.' : db.partial ? '. The rest will download when you have signal.' : '.'}` : 'Loads when you first search.'}</p>
     <ul class="rows"><li><button class="row" data-a="openSheet" data-type="usda"><span>USDA online search key</span><span class="dim">${state.settings.usdaKey ? 'Added' : 'Optional'}</span></button></li></ul></section>
@@ -440,10 +493,11 @@ function viewWelcome() {
   return `<section class="welcome">
     <h1>Rep Quest</h1>
     <p>Clear your quests every day: train, hit protein and calories, weigh in. Your numbers steer the plan.</p>
+    ${Cloud.user() ? `<p class="dim sm">Signed in as ${esc(Cloud.user().email)}. ${esc(Cloud.statusText())}</p>` : Cloud.enabled() ? `<button class="btn google" data-a="cloudSignIn">${GOOGLE_G} Continue with Google</button><p class="dim sm center">Or start on this phone only:</p>` : ''}
     <form id="welcome-form" class="form">
       <label>First name<input id="w-name" autocomplete="given-name"></label>
-      <div class="two"><label>Weight, kg<input id="w-weight" inputmode="decimal" required></label><label>Height, cm<input id="w-height" inputmode="numeric" value="183"></label></div>
-      <div class="two"><label>Age<input id="w-age" inputmode="numeric" value="20"></label><label>Sex, for the formula<select id="w-sex"><option value="">Choose</option><option value="male">Male</option><option value="female">Female</option></select></label></div>
+      <div class="two"><label>Weight, kg<input id="w-weight" inputmode="decimal" required></label><label>Height, cm<input id="w-height" inputmode="numeric"></label></div>
+      <div class="two"><label>Age<input id="w-age" inputmode="numeric"></label><label>Sex, for the formula<select id="w-sex"><option value="">Choose</option><option value="male">Male</option><option value="female">Female</option></select></label></div>
       <button class="btn solid wide" type="submit">Start</button>
     </form>
     <button class="link" data-a="importData">Restore from a backup</button>

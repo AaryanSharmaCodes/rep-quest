@@ -98,7 +98,7 @@ const SHEETS = {
     const vol = sum(w.exercises.flatMap(e => e.sets.filter(isWorking).map(x => (x.w || 0) * (x.r || 0))));
     const mins = Math.round((w.finishedAt - w.startedAt) / 60000);
     return `${sheetHead('Workout done')}
-      <p class="done-num"><b>${fmt(vol)}</b> kg lifted</p>
+      <p class="done-num"><b data-count="${Math.round(vol)}" data-k="sum-kg">${fmt(vol)}</b> kg lifted</p>
       <dl class="tally"><div><dd>${sets}</dd><dt>Sets</dt></div><div><dd>${mins}</dd><dt>Minutes</dt></div><div><dd>${(w.prs || []).length}</dd><dt>New bests</dt></div></dl>
       ${(w.prs || []).length ? `<ul class="prs">${w.prs.map(p => `<li><i class="chip" style="background:var(--carbs)"></i><span>${esc(p.name)}</span><b>${esc(setText(p, p.unit))}</b></li>`).join('')}</ul>` : '<p class="dim">No new bests today, and that still counts. Next session\'s targets are ready.</p>'}
       <button class="btn line wide" data-a="logWalk">Log a 20-minute incline walk</button>
@@ -140,10 +140,11 @@ const SHEETS = {
     const e = s.i != null ? state.active.exercises[s.i] : sheetRow(s);
     if (!e) return sheetHead('Removed');
     const pref = (state.altPrefs[e.name] || []).map(libOrCustom).filter(Boolean);
-    const alts = alternatesFor(e.name, e.p);
-    const list = [...pref, ...alts.filter(a => !pref.some(p => p.name === a.name))];
+    const atHome = s.i != null && state.active?.place === 'home';
+    const alts = atHome ? homeOptions(e.swappedFrom || e.name, e.p, state.settings.homeGear).filter(a => a.name !== e.name) : alternatesFor(e.name, e.p);
+    const list = atHome ? alts : [...pref, ...alts.filter(a => !pref.some(p => p.name === a.name))];
     return `${sheetHead(`Swap ${e.name}`, 'Machine busy, or something hurts? Pick another')}
-      ${s.i != null ? `<div class="seg">${[['today', 'Just today'], ['plan', 'Change my plan']].map(([v, l]) => `<button class="${ui.swapScope === v ? 'on' : ''}" data-a="swapScope" data-v="${v}">${l}</button>`).join('')}</div>` : ''}
+      ${s.i != null && !atHome ? `<div class="seg">${[['today', 'Just today'], ['plan', 'Change my plan']].map(([v, l]) => `<button class="${ui.swapScope === v ? 'on' : ''}" data-a="swapScope" data-v="${v}">${l}</button>`).join('')}</div>` : ''}
       <div class="searchbar">${i('search')}<input id="ex-q" type="search" placeholder="Search 800+ exercises" data-f="exSearch" autocomplete="off"></div>
       <div id="ex-results">${exerciseList(list, 'swapTo')}</div>`;
   },
@@ -208,6 +209,17 @@ const SHEETS = {
       </li>`).join('')}</ol>
       <button class="btn line wide" data-a="openSheet" data-type="addExercise" data-target="day" data-day="${day.id}">${i('plus')} Add exercise</button>
       <button class="link danger block-link" data-a="deleteDay">Delete this workout</button>`;
+  },
+
+  homeGear() {
+    const g = state.settings.homeGear;
+    state.settings.homeAsked = true;
+    return `${sheetHead('What do you have at home?', 'Bodyweight moves are always included')}
+      <ul class="rows">
+        <li><label class="row"><span>Dumbbells</span><input type="checkbox" class="sw" data-f="gear" data-k="dumbbell" ${g.dumbbell ? 'checked' : ''}></label></li>
+        <li><label class="row"><span>Resistance bands</span><input type="checkbox" class="sw" data-f="gear" data-k="band" ${g.band ? 'checked' : ''}></label></li>
+      </ul>
+      <button class="btn solid wide" data-a="closeAll">Done</button>`;
   },
 
   /* ---------- Settings ---------- */
@@ -277,7 +289,8 @@ const SHEETS = {
         <li><b>Typical estimates</b><p class="sm dim">About 240 everyday dishes written by hand. Oil and portion size can change them a lot.</p></li>
         <li><b>free-exercise-db</b><p class="sm dim">Exercise instructions and images, released into the public domain under the Unlicense.</p></li>
         <li><b>html5-qrcode</b><p class="sm dim">Barcode reading, Apache 2.0.</p></li>
-        <li><b>Big Shoulders Display and Instrument Sans</b><p class="sm dim">Typefaces under the SIL Open Font License.</p></li>
+        <li><b>canvas-confetti</b><p class="sm dim">Celebration effects by Kiril Vatev, ISC licence.</p></li>
+        <li><b>Cinzel, Cinzel Decorative, Silkscreen and Instrument Sans</b><p class="sm dim">Typefaces under the SIL Open Font License.</p></li>
       </ul>
       <p class="sm dim">This app gives general fitness guidance, not medical advice. If neck or shoulder symptoms return, stop that exercise and get it checked.</p>`;
   },
@@ -311,6 +324,7 @@ function foodResults(s) {
   const parts = [];
   if (s.corrected) parts.push(`<p class="sm dim">Showing results for "${esc(s.corrected)}"</p>`);
   if (s.results?.length) parts.push(`<ul class="food-list">${s.results.map(f => foodRow(f)).join('')}</ul>`);
+  else if (ui.foodDb.failed && !ui.foodDb.loaded) parts.push('<p class="empty">The food database could not load. Connect once to download it, or search online below.</p>');
   else if (!s.searching) parts.push(`<p class="empty">No match in ${ui.foodDb.loaded ? fmt(ui.foodDb.loaded) : 'the'} foods here.</p>`);
   if (s.online?.length) parts.push(`<h3 class="sh-sub">From online databases</h3><ul class="food-list">${s.online.map(f => foodRow(f)).join('')}</ul>`);
   if (s.onlineNote) parts.push(`<p class="sm dim">${esc(s.onlineNote)}</p>`);

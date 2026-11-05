@@ -237,6 +237,7 @@ function suggestNext(pe, history) {
   const rirGoal = pe.rirGoal ?? 2;
   const last = history[0];
   if (!last) {
+    if (inc === 0) return { kind: 'first', w: null, reps: Array(planned).fill(hi), headline: `Aim for ${lo} to ${hi} ${unit}`, why: `Stop with 1 to 3 ${unit} in reserve.`, options: [], stalled: false };
     return { kind: 'first', w: null, reps: Array(planned).fill(hi), headline: `Find a weight for ${lo} to ${hi} ${unit}`, why: `Pick a load that leaves 1 to 3 ${unit} in reserve.`, options: [], stalled: false };
   }
   const sets = last.sets.filter(isWorking);

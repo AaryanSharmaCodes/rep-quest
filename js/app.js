@@ -25,6 +25,9 @@ function playClang() { tone(1250, 0.22, 'triangle', 0.05); tone(1873, 0.16, 'sin
 function playTick() { tone(880, 0.05, 'sine', 0.05); }
 function playBeep() { tone(880, 0.16, 'sine', 0.16); tone(1175, 0.2, 'sine', 0.16, 0.2); }
 function playBest() { tone(784, 0.1, 'triangle', 0.1); tone(1175, 0.2, 'triangle', 0.1, 0.1); }
+// Climbs a little with each set of an exercise, so finishing one sounds like getting somewhere.
+function playSetDone(n) { const f = 523 * 2 ** (Math.min(n, 8) * 2 / 12); tone(f, 0.09, 'triangle', 0.09); tone(f * 1.5, 0.14, 'sine', 0.05, 0.06); }
+function playExerciseDone() { [523, 659, 784, 1047].forEach((f, n) => tone(f, 0.16, 'triangle', 0.08, n * 0.07)); }
 // iOS 18 gives a haptic tap when a native switch toggles. Harmless everywhere else.
 const haptic = (() => {
   let label = null;
@@ -45,22 +48,40 @@ const VIEWS = { today: viewToday, train: viewTrain, food: viewFood, progress: vi
 function render() {
   const app = document.getElementById('app');
   const onWelcome = !state.onboarded;
+  const entering = ui.enter;
+  ui.enter = false;
+  app.classList.remove('enter'); // a re-render mid-entrance must not replay it
   app.innerHTML = onWelcome ? viewWelcome() : VIEWS[ui.tab]();
-  document.getElementById('tabs').innerHTML = onWelcome ? '' : [['today', 'Today'], ['train', 'Train'], ['food', 'Food'], ['progress', 'Progress'], ['you', 'You']]
-    .map(([id, l]) => `<button class="${ui.tab === id ? 'on' : ''}${id === 'train' && state.active ? ' live' : ''}" data-a="go" data-tab="${id}" aria-current="${ui.tab === id ? 'page' : 'false'}">${i(id)}<span>${l}</span></button>`).join('');
+  renderTabs(onWelcome);
   renderSheet();
   tickRest();
   tickClock();
+  Motion.afterRender(app, entering);
+}
+// The bar stays in the page between renders, so its marker can slide from tab to tab.
+const TAB_LIST = [['today', 'Today'], ['train', 'Train'], ['food', 'Food'], ['progress', 'Progress'], ['you', 'You']];
+function renderTabs(onWelcome) {
+  const el = document.getElementById('tabs');
+  if (onWelcome) { el.innerHTML = ''; return; }
+  if (!el.firstChild) el.innerHTML = `<i class="tab-ind"></i>${TAB_LIST.map(([id, l]) => `<button data-a="go" data-tab="${id}">${i(id)}<span>${l}</span></button>`).join('')}`;
+  el.querySelector('.tab-ind').style.setProperty('--n', TAB_LIST.findIndex(t => t[0] === ui.tab));
+  el.querySelectorAll('button').forEach(b => {
+    const on = b.dataset.tab === ui.tab;
+    b.classList.toggle('on', on);
+    b.classList.toggle('live', b.dataset.tab === 'train' && !!state.active);
+    b.classList.toggle('alert', b.dataset.tab === 'progress' && !!ui.coachAlert);
+    b.setAttribute('aria-current', on ? 'page' : 'false');
+  });
 }
 function renderSheet() {
   const el = document.getElementById('sheet');
   const s = ui.sheet;
   if (!s) {
-    el.hidden = true;
-    el.innerHTML = '';
     document.body.classList.remove('locked');
+    if (!el.hidden) Motion.closeSheet(el, () => { if (!ui.sheet) { el.hidden = true; el.innerHTML = ''; } });
     return;
   }
+  el.style.pointerEvents = '';
   const old = el.querySelector('.panel');
   const scroll = old && el.dataset.type === s.type ? old.scrollTop : 0;
   const first = el.hidden;
@@ -151,8 +172,12 @@ function rowsToActive(rows, deload) {
 }
 function startWorkout(day) {
   const deload = inDeload();
-  state.active = { id: uid(), date: today(), name: day ? day.name : 'Workout', dayId: day?.id || null, startedAt: Date.now(), deload, exercises: day ? rowsToActive(day.exercises, deload) : [] };
+  const place = state.settings.place === 'home' && day ? 'home' : 'gym';
+  // A home version isn't a plan row, so changes to it never touch the gym plan.
+  const exercises = !day ? [] : place === 'home' ? rowsToActive(homeRows(day), deload).map(e => ({ ...e, planRow: undefined })) : rowsToActive(day.exercises, deload);
+  state.active = { id: uid(), date: today(), name: day ? day.name : 'Workout', dayId: day?.id || null, place, startedAt: Date.now(), deload, exercises };
   ui.tab = 'train';
+  ui.enter = true;
   requestWake();
   haptic();
   commit();
@@ -196,7 +221,7 @@ function finishWorkout() {
   }
   const open = a.exercises.flatMap(e => e.sets).filter(s => !s.done).length;
   if (open && !confirm(`${open} sets aren't ticked off and won't be saved. Finish anyway?`)) return;
-  const w = { id: a.id, date: a.date, name: a.name, dayId: a.dayId, startedAt: a.startedAt, finishedAt: Date.now(), deload: a.deload || undefined, exercises, prs: [] };
+  const w = { id: a.id, date: a.date, name: a.name, dayId: a.dayId, place: a.place === 'home' ? 'home' : undefined, startedAt: a.startedAt, finishedAt: Date.now(), deload: a.deload || undefined, exercises, prs: [] };
   state.workouts.push(w);
   recomputePRs();
   if (!state.profile.startDate) state.profile.startDate = a.date;
@@ -206,6 +231,8 @@ function finishWorkout() {
   ui.sheet = { type: 'summary', id: w.id };
   ui.sheetStack = [];
   if (w.prs.length) playBest(); else playClang();
+  Motion.after(() => Motion.workoutDone(w.prs.length));
+  refreshCoachAlert();
   commit();
 }
 function bestBefore(name) {
@@ -312,6 +339,7 @@ async function importFile(file) {
     if (state.onboarded && !confirm('Replace everything on this phone with this backup?')) return;
     state = migrate(data);
     state.onboarded = true;
+    applyTheme(state.settings.theme);
     ui.sheet = null; ui.sheetStack = [];
     toast('Backup restored');
     commit();
@@ -339,7 +367,33 @@ function restoreFromArchive(key) {
 }
 
 const A = {
-  go(d) { ui.tab = d.tab; ui.foodDate = d.tab === 'food' ? ui.foodDate : today(); render(); window.scrollTo(0, 0); },
+  go(d) {
+    if (d.tab === ui.tab) { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+    Motion.tabFrom(ui.tab, d.tab);
+    ui.tab = d.tab;
+    ui.foodDate = d.tab === 'food' ? ui.foodDate : today();
+    ui.enter = true;
+    if (d.tab === 'progress') ui.coachAlert = false;
+    render();
+    window.scrollTo(0, 0);
+  },
+  setPlace(d) {
+    state.settings.place = d.v;
+    ui.enter = false;
+    haptic();
+    Motion.after(() => Motion.stagger('.plan-list > li'));
+    if (d.v === 'home' && !state.settings.homeAsked) A.openSheet({ type: 'homeGear' });
+    commit();
+  },
+  setTheme(d, el) { Motion.switchTheme(d.v, el); },
+  cloudSignIn() { Cloud.signIn(); },
+  async cloudSignOut() {
+    if (!confirm('Sign out? Your data stays in your Google account and comes back when you sign in. It will be removed from this phone.')) return;
+    if (!(await Cloud.signOut())) { toast('Could not reach your account, so you are still signed in. Nothing was lost.'); return; }
+    ui.tab = 'today';
+    ui.enter = true;
+    commit();
+  },
   openSheet(d, el) {
     const s = { ...d, type: d.type };
     delete s.a;
@@ -369,6 +423,7 @@ const A = {
     const cur = num(el.value) ?? 0;
     el.value = round(cur + Number(d.by), 1);
     haptic();
+    Motion.pop(el);
   },
   weightDate(d) { ui.sheet.date = d.k; render(); },
   saveWeight(d) {
@@ -378,6 +433,8 @@ const A = {
     if (!state.profile.startDate) state.profile.startDate = d.k;
     ui.sheet = ui.sheetStack.pop() || null;
     haptic();
+    Motion.after(() => Motion.floatMid(`${round(w, 2)} kg logged`));
+    refreshCoachAlert();
     commit();
   },
   clearWeight(d) { delete getDay(d.k).weight; closeSheet(); },
@@ -423,7 +480,8 @@ const A = {
     playTick();
     scheduleSave();
     const addedEl = document.getElementById('food-added');
-    if (addedEl && parent) addedEl.textContent = `${parent.added} added`;
+    if (addedEl && parent) { addedEl.textContent = `${parent.added} added`; Motion.pop(addedEl); }
+    Motion.foodAdded(el, m.kcal);
     const row = el.closest('.food-row');
     row?.classList.add('flash');
     setTimeout(() => row?.classList.remove('flash'), 500);
@@ -451,12 +509,14 @@ const A = {
     const slot = v('food-slot');
     const { parent, date } = targetSlotAndDate();
     const amount = unit === -1 ? `${round(qty, 1)} g` : qty === 1 ? f.servings[unit].label : `${round(qty, 2)} × ${f.servings[unit].label}`;
-    logEntry(date, slot, { name: f.name, ...macrosFor(f, grams), grams, amount, source: f.src });
+    const logged = macrosFor(f, grams);
+    logEntry(date, slot, { name: f.name, ...logged, grams, amount, source: f.src });
     addToRecent(compactFood(f));
     bumpAdded(parent);
     ui.sheet = ui.sheetStack.pop() || null;
     haptic();
     playTick();
+    Motion.after(() => Motion.floatMid(`+${fmt(logged.kcal)} kcal`));
     commit();
   },
   deleteCustomFood(d) {
@@ -555,14 +615,22 @@ const A = {
     s.done = true;
     haptic();
     playTick();
+    const now = { w: Number(s.w) || 0, r: Number(s.r) || 0 };
     const before = bestBefore(e.name);
-    const score = setScore({ w: Number(s.w) || 0, r: Number(s.r) || 0 });
+    const score = setScore(now);
+    let best = false;
     if (isWorking(s) && before > 0 && score > before + 0.001) {
       const seen = state.active.exercises.flatMap(x => (x.name === e.name ? x.sets.filter(y => y !== s && y.done) : [])).map(y => setScore({ w: Number(y.w) || 0, r: Number(y.r) || 0 }));
-      if (!seen.some(x => x >= score)) { toast(`New best: ${setText({ w: Number(s.w), r: Number(s.r) }, e.unit)}`, 'best'); playBest(); }
+      if (!seen.some(x => x >= score)) { best = true; toast(`New best: ${setText(now, e.unit)}`, 'best'); playBest(); }
     }
     const moreInLinked = e.superset && d.i < state.active.exercises.length - 1;
     if (!moreInLinked) startRest(s.type === 'warmup' ? 60 : e.rest || 90);
+    const finished = e.sets.every(x => x.done);
+    const lastSets = exerciseHistory(state.workouts, e.name, 1)[0]?.sets.filter(isWorking) || [];
+    const prevSet = isWorking(s) && s.type !== 'drop' ? lastSets[e.sets.slice(0, Number(d.j)).filter(x => isWorking(x) && x.type !== 'drop').length] : null;
+    const beat = !!prevSet && score > setScore(prevSet) + 0.001;
+    if (finished) playExerciseDone(); else if (!best) playSetDone(e.sets.filter(x => x.done).length - 1);
+    Motion.after(() => Motion.setDone(d.i, d.j, { finished, best, beat, text: now.w ? `+${fmt(now.w * now.r)} kg` : `+${now.r} ${unitWord(e)}` }));
     commit();
   },
   cycleType(d) {
@@ -610,13 +678,14 @@ const A = {
       const planId = old.planRow;
       const doneSets = old.sets.filter(x => x.done).length;
       if (doneSets && !confirm(`${old.name} has ${doneSets} finished sets. They won't be saved if you swap. Continue?`)) return;
+      if (state.active.place === 'home') state.homeChoice[old.swappedFrom || old.name] = d.name;
       state.active.exercises[s.i] = { ...row, id: old.id, planRow: planId, swappedFrom: old.swappedFrom || old.name, superset: old.superset, sets: old.sets.map(() => ({ w: '', r: '', done: false })) };
       if (ui.swapScope === 'plan' && planId) {
         state.program.days.forEach(day => { day.exercises = day.exercises.map(r => (r.id === planId ? { ...row, id: r.id, sets: r.sets } : r)); });
         state.active.exercises[s.i].swappedFrom = undefined;
         markEdited();
       }
-      toast(ui.swapScope === 'plan' ? 'Swapped and saved to your plan' : 'Swapped for today');
+      toast(state.active.place === 'home' ? 'Swapped, and remembered for home' : ui.swapScope === 'plan' ? 'Swapped and saved to your plan' : 'Swapped for today');
     } else {
       const day = findDay(s.day);
       day.exercises = day.exercises.map(r => (r.id === s.row ? { ...row, id: r.id, sets: r.sets } : r));
@@ -727,6 +796,7 @@ const A = {
     state.targets = adjustMacros(state.targets, c.newKcal, c.weight);
     state.kcalChangedOn = today();
     logTargets(`Coach: ${c.title}`);
+    ui.coachAlert = false;
     toast(`Target set to ${fmt(c.newKcal)} kcal`);
     commit();
   },
@@ -838,12 +908,15 @@ const FIELD = {
     markEdited();
     scheduleSave();
   },
-  setting(d, el) { state.settings[d.k] = el.checked; scheduleSave(); },
+  setting(d, el) { state.settings[d.k] = el.checked; scheduleSave(); if (d.k === 'animations') Motion.refresh(); },
+  gear(d, el) { state.settings.homeGear[d.k] = el.checked; scheduleSave(); },
   liftChart(d, el) { ui.liftChart = el.value; render(); },
   targetCheck() { refreshMacroSum(); },
 };
 
 /* ---------- Events ---------- */
+// iPhone Safari only shows :active press effects once the page listens for touches.
+document.addEventListener('touchstart', () => {}, { passive: true });
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-a]');
   if (!el) return;
@@ -858,13 +931,14 @@ document.addEventListener('change', async e => {
   if (e.target.id === 'restore-file' && e.target.files[0]) importFile(e.target.files[0]);
   if (e.target.id === 'scan-file' && e.target.files[0]) {
     toast('Reading barcode...');
+    let code = null;
     try {
-      const code = await readBarcodeFromPhoto(e.target.files[0]);
+      code = await readBarcodeFromPhoto(e.target.files[0]);
       const food = await lookupBarcode(code);
       if (food) A.openSheet({ type: 'amount', foodId: rememberFood(food), slot: targetSlotAndDate().slot });
       else toast(`No product found for ${code}. Type its macros instead.`);
     } catch (err) {
-      toast('No barcode found. Try again closer, with more light.');
+      toast(code ? 'Could not look that product up. Check your connection.' : 'No barcode found. Try again closer, with more light.');
     }
     e.target.value = '';
   }
@@ -908,8 +982,9 @@ document.addEventListener('pointercancel', endChart);
 window.addEventListener('resize', () => { if (state.onboarded && !document.activeElement?.matches('input,textarea,select')) render(); });
 
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') flushSave();
+  if (document.visibilityState === 'hidden') { flushSave(); Cloud.pushNow(); }
   else {
+    Cloud.pull();
     if (ui.openedOn !== today()) { ui.openedOn = today(); ui.foodDate = today(); ui.planDay = new Date().getDay(); }
     if (state.active) requestWake();
     if (!document.activeElement || document.activeElement === document.body) render();
@@ -918,6 +993,20 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 window.addEventListener('pagehide', flushSave);
+
+// A dot on the Progress tab when the coach has a calorie change to review.
+function refreshCoachAlert() {
+  const c = state.onboarded ? coachNow() : null;
+  ui.coachAlert = ui.tab !== 'progress' && (c?.status === 'raise' || c?.status === 'lower');
+}
+
+/* ---------- Themes ---------- */
+function applyTheme(id) {
+  const theme = THEMES.find(t => t.id === id) || THEMES[0];
+  document.documentElement.dataset.theme = theme.id;
+  try { localStorage.setItem('rq-theme', theme.id); } catch (e) { /* the inline script just falls back to the default */ }
+  document.querySelector('meta[name=theme-color]')?.setAttribute('content', theme.bar);
+}
 
 /* ---------- App updates ---------- */
 let swReg = null, updateReady = false;
@@ -946,12 +1035,16 @@ async function boot() {
     try { if (idb) await idbPut('state-v1', saved); } catch (e) { /* the migrated copy still has everything */ }
   }
   state = migrate(saved) || defaultState();
+  applyTheme(state.settings.theme);
+  Motion.refresh();
+  refreshCoachAlert();
   if (state.justUpgraded) ui.sheet = { type: 'profile' };
   if (state.active) ui.tab = 'train'; // reopened mid-workout: go straight back to it
   try { await navigator.storage?.persist?.(); } catch (e) { /* optional */ }
   render();
   if (saved && (saved.v || 1) < 2) writeSave();
   if (state.active) requestWake();
+  Cloud.start();
   if (state.onboarded) {
     // Fetch the database in the background so the first search is instant.
     setTimeout(() => Foods.start(), 1500);

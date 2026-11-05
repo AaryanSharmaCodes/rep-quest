@@ -117,7 +117,44 @@ const LIBRARY = [
   X('Machine crunch', 'abs', 'abs', [], 'machine', 'isolation', { lo: 12, hi: 15, inc: 2.5 }),
   X('Reverse crunch', 'abs', 'abs', [], 'bodyweight', 'isolation', { lo: 10, hi: 20 }),
   X('Plank', 'abs', 'abs', [], 'bodyweight', 'isolation', { lo: 30, hi: 60, unit: 'sec' }),
+  // Home: little or no equipment. Rep ranges run higher because the load is fixed.
+  X('Dumbbell floor press', 'chest press', 'chest', ['triceps', 'front delts'], 'dumbbell', 'compound', { cue: 'Lie on the floor. Weight is per hand. Elbows touch down softly.' }),
+  X('Band chest press', 'chest press', 'chest', ['triceps', 'front delts'], 'band', 'compound', { lo: 12, hi: 20, cue: 'Anchor the band behind you at chest height.' }),
+  X('Decline push-up', 'incline press', 'chest', ['front delts', 'triceps'], 'bodyweight', 'compound', { lo: 8, hi: 20, cue: 'Feet on a chair or bed. Body stays in one straight line.' }),
+  X('Band incline press', 'incline press', 'chest', ['front delts', 'triceps'], 'band', 'compound', { lo: 12, hi: 20, cue: 'Anchor the band low and press up and forward.' }),
+  X('Wide push-up', 'chest fly', 'chest', ['triceps'], 'bodyweight', 'compound', { lo: 10, hi: 25 }),
+  X('Band chest fly', 'chest fly', 'chest', [], 'band', 'isolation', { lo: 12, hi: 20 }),
+  X('Band lat pulldown', 'vertical pull', 'lats', ['biceps', 'upper back'], 'band', 'compound', { lo: 12, hi: 20, cue: 'Anchor the band high on a door. Drive elbows to your ribs.' }),
+  X('Prone lat pull', 'vertical pull', 'lats', ['upper back'], 'bodyweight', 'isolation', { lo: 12, hi: 20, cue: 'Lie face down. Pull elbows to your ribs and squeeze.' }),
+  X('Band row', 'row', 'upper back', ['lats', 'biceps', 'rear delts'], 'band', 'compound', { lo: 12, hi: 20 }),
+  X('Under-table row', 'row', 'upper back', ['lats', 'biceps'], 'bodyweight', 'compound', { lo: 8, hi: 15, cue: 'Lie under a sturdy table, grip the edge and pull your chest up. Test that it holds you first.' }),
+  X('Pike push-up', 'shoulder press', 'front delts', ['side delts', 'triceps'], 'bodyweight', 'compound', { lo: 6, hi: 15, cue: 'Hips high. Lower your head toward the floor.' }),
+  X('Band overhead press', 'shoulder press', 'front delts', ['side delts', 'triceps'], 'band', 'compound', { lo: 12, hi: 20 }),
+  X('Band lateral raise', 'lateral raise', 'side delts', [], 'band', 'isolation', { lo: 15, hi: 25 }),
+  X('Water bottle lateral raise', 'lateral raise', 'side delts', [], 'bodyweight', 'isolation', { lo: 15, hi: 30, cue: 'Full bottles or any light household weight. Stop at shoulder height.' }),
+  X('Band pull-apart', 'rear delt', 'rear delts', ['upper back'], 'band', 'isolation', { lo: 15, hi: 25 }),
+  X('Prone Y raise', 'rear delt', 'rear delts', ['upper back'], 'bodyweight', 'isolation', { lo: 12, hi: 20, cue: 'Lie face down and lift your arms in a Y.' }),
+  X('Band curl', 'biceps curl', 'biceps', ['forearms'], 'band', 'isolation', { lo: 12, hi: 20 }),
+  X('Backpack curl', 'biceps curl', 'biceps', ['forearms'], 'bodyweight', 'isolation', { lo: 10, hi: 20, cue: 'Load a backpack with books. Elbows stay at your sides.' }),
+  X('Band pushdown', 'triceps', 'triceps', [], 'band', 'isolation', { lo: 12, hi: 20 }),
+  X('Diamond push-up', 'triceps', 'triceps', ['chest'], 'bodyweight', 'compound', { lo: 6, hi: 20 }),
+  X('Bodyweight squat', 'squat', 'quads', ['glutes'], 'bodyweight', 'compound', { lo: 15, hi: 30 }),
+  X('Band squat', 'squat', 'quads', ['glutes'], 'band', 'compound', { lo: 12, hi: 20 }),
+  X('Reverse lunge', 'single leg', 'quads', ['glutes'], 'bodyweight', 'compound', { lo: 10, hi: 20, cue: 'Reps are per leg.' }),
+  X('Bodyweight split squat', 'single leg', 'quads', ['glutes'], 'bodyweight', 'compound', { lo: 8, hi: 20, cue: 'Back foot on a chair. Reps are per leg.' }),
+  X('Sissy squat', 'leg extension', 'quads', [], 'bodyweight', 'isolation', { lo: 8, hi: 20, cue: 'Hold a door frame. Knees travel forward, hips stay open.' }),
+  X('Band leg curl', 'leg curl', 'hamstrings', [], 'band', 'isolation', { lo: 12, hi: 20 }),
+  X('Sliding leg curl', 'leg curl', 'hamstrings', [], 'bodyweight', 'isolation', { lo: 8, hi: 15, cue: 'Heels on a towel on a smooth floor. Hips up, slide out slowly.' }),
+  X('Single-leg hip hinge', 'hinge', 'hamstrings', ['glutes'], 'bodyweight', 'isolation', { lo: 10, hi: 20, cue: 'Reps are per leg.' }),
+  X('Dumbbell hip thrust', 'glute', 'glutes', ['hamstrings'], 'dumbbell', 'compound', { lo: 10, hi: 15, cue: 'Back on a sofa edge, dumbbell on your hips.' }),
+  X('Band kickback', 'glute', 'glutes', [], 'band', 'isolation', { lo: 12, hi: 20 }),
+  X('Glute bridge', 'glute', 'glutes', ['hamstrings'], 'bodyweight', 'isolation', { lo: 15, hi: 30 }),
+  X('Dumbbell calf raise', 'calf', 'calves', [], 'dumbbell', 'isolation', { lo: 12, hi: 20, inc: 1 }),
+  X('Single-leg calf raise', 'calf', 'calves', [], 'bodyweight', 'isolation', { lo: 10, hi: 20, cue: 'On a step. Pause at the bottom. Reps are per leg.' }),
+  X('Leg raise', 'abs', 'abs', [], 'bodyweight', 'isolation', { lo: 10, hi: 20 }),
 ];
+// Home moves stay out of the gym's swap lists, but search still finds them.
+const GYM_LIBRARY = LIBRARY.slice(0, LIBRARY.findIndex(e => e.name === 'Dumbbell floor press'));
 const LIB_BY_NAME = Object.fromEntries(LIBRARY.map(e => [e.name.toLowerCase(), e]));
 const libEntry = name => LIB_BY_NAME[String(name || '').toLowerCase()] || null;
 
@@ -132,11 +169,40 @@ const muscleInfo = e => {
 
 function alternatesFor(name, primary) {
   const me = libEntry(name);
-  if (!me) return LIBRARY.filter(e => e.p === primary).slice(0, 10);
+  if (!me) return GYM_LIBRARY.filter(e => e.p === primary).slice(0, 10);
   const sameEquip = e => (e.equip === me.equip ? 1 : 0);
-  const same = LIBRARY.filter(e => e.pattern === me.pattern && e.name !== me.name).sort((a, b) => sameEquip(b) - sameEquip(a));
-  const also = LIBRARY.filter(e => e.p === me.p && e.pattern !== me.pattern && e.kind === me.kind);
+  const same = GYM_LIBRARY.filter(e => e.pattern === me.pattern && e.name !== me.name).sort((a, b) => sameEquip(b) - sameEquip(a));
+  const also = GYM_LIBRARY.filter(e => e.p === me.p && e.pattern !== me.pattern && e.kind === me.kind);
   return [...same, ...also].slice(0, 12);
+}
+
+// Home versions of a gym workout. Heavier options come first; these need a bar or a bench, so they stay at the gym.
+const NOT_AT_HOME = new Set(['Chest dip', 'Pull-up', '45-degree back extension', 'Hanging knee raises', "Captain's chair knee raise", 'Dumbbell bench press', 'Incline dumbbell press']);
+const GEAR_RANK = { dumbbell: 0, band: 1, bodyweight: 2 };
+const canDoAtHome = (e, gear) => e.equip in GEAR_RANK && !NOT_AT_HOME.has(e.name) && (e.equip === 'bodyweight' || !!gear[e.equip]);
+function homeOptions(name, primary, gear) {
+  const me = libEntry(name);
+  const fit = LIBRARY.filter(e => canDoAtHome(e, gear));
+  const same = me ? fit.filter(e => e.pattern === me.pattern) : [];
+  const also = fit.filter(e => e.p === (me?.p || primary) && !same.includes(e));
+  const byGear = (a, b) => GEAR_RANK[a.equip] - GEAR_RANK[b.equip];
+  return [...same.sort(byGear), ...also.sort(byGear)];
+}
+function homeDay(rows, gear, choices = {}) {
+  const out = [];
+  rows.forEach(r => {
+    const options = homeOptions(r.name, r.p, gear);
+    const me = libEntry(r.name);
+    const samePattern = options.filter(o => o.pattern === me?.pattern);
+    const free = (samePattern.length ? samePattern : options).find(o => !out.some(x => x.name === o.name));
+    const pick = (choices[r.name] && libEntry(choices[r.name])) || free || samePattern[0] || options[0];
+    if (!pick) { out.push({ ...r }); return; }
+    // Two gym exercises can share one home move, so its sets add up instead of listing it twice.
+    const already = out.find(x => x.name === pick.name);
+    if (already) already.sets += r.sets;
+    else out.push({ ...planRow(pick.name, r.sets), id: r.id, swappedFrom: r.name });
+  });
+  return out;
 }
 
 // Turn "name, sets, low, high" into a full plan row using what the library knows.

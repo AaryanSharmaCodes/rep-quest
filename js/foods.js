@@ -4,28 +4,40 @@ const SOURCE_NAMES = { c: 'Typical estimate', i: 'Indian Nutrient Databank', s: 
 
 const Foods = {
   worker: null, pending: new Map(), nextId: 1, ready: false, waiting: [],
+  // Nothing may wait forever on a worker that died, and the next search gets a fresh try.
+  fail() {
+    this.worker?.terminate();
+    this.worker = null;
+    this.ready = false;
+    ui.foodDb = { ...ui.foodDb, failed: true };
+    this.waiting.splice(0).forEach(w => w.resolve({ results: [] }));
+    this.pending.forEach(resolve => resolve({ results: [] }));
+    this.pending.clear();
+    onFoodProgress();
+  },
   start() {
     if (this.worker) return;
     try {
       this.worker = new Worker('food-worker.js');
     } catch (e) { return; }
     this.worker.onmessage = ({ data }) => {
-      if (data.type === 'ready') { this.ready = true; this.waiting.splice(0).forEach(f => f()); }
+      if (data.type === 'ready') { this.ready = true; this.waiting.splice(0).forEach(w => w.go()); }
       if (data.type === 'progress') { ui.foodDb = { loaded: data.loaded, total: data.total, done: data.done }; onFoodProgress(); }
       if (data.type === 'partial') { ui.foodDb = { ...ui.foodDb, partial: true }; onFoodProgress(); }
       if (data.type === 'results' || data.type === 'barcode') {
         const cb = this.pending.get(data.id);
         if (cb) { this.pending.delete(data.id); cb(data); }
       }
-      if (data.type === 'error') { this.ready = false; ui.foodDb = { ...ui.foodDb, failed: true }; onFoodProgress(); }
+      if (data.type === 'error') this.fail();
     };
+    this.worker.onerror = () => this.fail();
   },
   send(msg) {
     return new Promise(resolve => {
       const go = () => { const id = this.nextId++; this.pending.set(id, resolve); this.worker.postMessage({ ...msg, id }); };
       this.start();
       if (!this.worker) { resolve({ results: [] }); return; }
-      if (this.ready) go(); else this.waiting.push(go);
+      if (this.ready) go(); else this.waiting.push({ go, resolve });
     });
   },
   search(q) { return this.send({ type: 'search', q }); },
