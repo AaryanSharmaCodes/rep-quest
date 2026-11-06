@@ -202,6 +202,15 @@ function startWorkout(day) {
   commit();
   window.scrollTo(0, 0);
 }
+// A workout picked from the list of other days, at the place chosen for it.
+function startDayAt(id, place) {
+  if (state.active && !confirm('You already have a workout running. Replace it?')) return;
+  state.settings.place = place;
+  state.settings.placeOn = today();
+  ui.sheet = null;
+  ui.sheetStack = [];
+  startWorkout(findDay(id));
+}
 function targetsForSet(e, si) {
   const hist = exerciseHistory(state.workouts, e.name, 6);
   const n = nextFor(e, hist);
@@ -684,6 +693,8 @@ const A = {
     if (state.active && !confirm('You already have a workout running. Replace it?')) return;
     startWorkout(findDay(d.id));
   },
+  startAtGym(d) { startDayAt(d.id, 'gym'); },
+  startAtHome(d) { startDayAt(d.id, 'home'); },
   startEmpty() { startWorkout(null); },
   startDeload() {
     state.deloadUntil = addDays(today(), 6);

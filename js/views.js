@@ -261,7 +261,7 @@ function viewPlan() {
   <div class="dstrip">${strip}</div>
   ${showDone ? doneCard(trainedToday) : `${isHome && !doneToday && day ? homeBanner(day.id) : ''}${body}`}
   ${doneToday ? '' : `<section class="block"><h2>Train something else</h2>
-    <div class="pills">${others.map(d => `<button class="pill" data-a="startDay" data-id="${d.id}">${esc(d.name)}</button>`).join('')}<button class="pill" data-a="startEmpty">Empty workout</button></div></section>`}
+    <div class="pills">${others.map(d => `<button class="pill" data-a="openSheet" data-type="startChoice" data-id="${d.id}">${esc(d.name)}</button>`).join('')}<button class="pill" data-a="startEmpty">Empty workout</button></div></section>`}
   <section class="block"><h2>Cardio</h2>
     <button class="row" data-a="openSheet" data-type="log"><span>Incline walk or other cardio</span><span class="dim">${peekDay(today()).cardio ? `${peekDay(today()).cardio} min today` : 'Log minutes'}</span></button></section>
   <section class="block"><h2>History</h2>

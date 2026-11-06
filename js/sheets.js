@@ -240,7 +240,16 @@ const SHEETS = {
       <div class="gear-grid">${HOME_GEAR.map(([k, l]) => `<button class="gear-chip${g[k] ? ' on' : ''}" data-a="toggleGear" data-k="${k}" aria-pressed="${!!g[k]}"><span class="gear-box">${g[k] ? ICON.tick : ''}</span>${l}</button>`).join('')}</div>
       ${rows.length ? `<h3 class="sh-sub">${esc(day.name)} at home</h3><p class="dim sm">Same muscles, using what you have.</p>
       <ul class="gear-preview">${rows.map(r => `<li><span>${esc(r.name)}</span><em>${r.sets} × ${r.lo} to ${r.hi}${r.unit === 'sec' ? ' s' : ''}</em></li>`).join('')}</ul>` : ''}
-      <button class="btn solid wide" data-a="useHome">Use home workout</button>`;
+      ${s.start ? `<button class="btn solid wide" data-a="startAtHome" data-id="${s.id}">Start home workout</button>` : '<button class="btn solid wide" data-a="useHome">Use home workout</button>'}`;
+  },
+  startChoice(s) {
+    const day = findDay(s.id);
+    if (!day) return sheetHead('This workout is gone');
+    return `${sheetHead(day.name, 'Where are you training today?')}
+      <div class="plan-cards">
+        <button class="plan-card" data-a="startAtGym" data-id="${day.id}"><b>At the gym</b><span>${day.exercises.length} exercises, as planned.</span></button>
+        <button class="plan-card" data-a="openSheet" data-type="homeGear" data-id="${day.id}" data-start="1"><b>At home</b><span>Same muscles, using the equipment you have.</span></button>
+      </div>`;
   },
 
   /* ---------- Settings ---------- */
