@@ -79,7 +79,7 @@ function adviceList() {
   } else if (c.status === 'review') {
     add({ id: 'review', title: c.title, body: c.body, action: ['See lifts', 'go', { tab: 'progress' }] });
   }
-  if (d.weight == null) add({ id: 'weigh', title: 'Weigh in', body: 'Morning, after the bathroom, before food. One reading never matters, but the trend does.', action: ['Log weight', 'sheet', { type: 'weight' }], hold: true });
+  if (d.weight == null) add({ id: 'weigh', title: 'Weigh in', body: 'First thing in the morning. One reading never matters, but the trend does.', action: ['Log weight', 'sheet', { type: 'weight' }], hold: true });
 
   const leftP = tg.protein - t.p;
   if (leftP > 20 && hour >= 11) {
@@ -173,7 +173,7 @@ function viewToday() {
     },
     weigh: {
       label: 'Weigh in', value: d.weight != null ? `${d.weight} kg` : 'Not yet',
-      sub: d.weight != null ? 'Logged today' : 'Morning, before food',
+      sub: d.weight != null ? 'Logged today' : 'First thing in the morning',
       pct: null, open: 'data-a="openSheet" data-type="weight"',
     },
   };
@@ -201,7 +201,7 @@ function viewToday() {
 }
 
 /* ---------- Train ---------- */
-function targetFor(e) { return suggestNext(e, exerciseHistory(state.workouts, e.name, 6)); }
+function targetFor(e) { return nextFor(e, exerciseHistory(state.workouts, e.name, 6)); }
 function viewTrain() { return state.active ? viewActive() : viewPlan(); }
 // The normal workout, with the option of swapping it for a home version.
 const gearSummary = () => {
@@ -288,7 +288,7 @@ function viewActive() {
 function exerciseBlock(e, ei) {
   const hist = exerciseHistory(state.workouts, e.name, 6);
   const last = hist[0];
-  const n = suggestNext(e, hist);
+  const n = nextFor(e, hist);
   const chosen = e.chosen || n.chosen;
   const showRir = state.settings.showRir || e.mode === 'rir';
   const prevWork = last ? last.sets.filter(isWorking) : [];
@@ -460,7 +460,7 @@ function viewYou() {
     <li><button class="row" data-a="openSheet" data-type="goal"><span>Goal</span><span class="dim">${esc(GOALS[state.goal.mode].label)}</span></button></li>
     <li><button class="row" data-a="openSheet" data-type="programs"><span>Workout program</span><span class="dim">${esc(state.program.name)}</span></button></li>
     <li><button class="row" data-a="openSheet" data-type="schedule"><span>Weekly schedule</span><span class="dim">${Object.keys(state.program.schedule).length} days</span></button></li>
-    <li><button class="row" data-a="openSheet" data-type="profile"><span>Height, age and activity</span><span class="dim">${p.heightCm ? `${p.heightCm} cm, ${p.age}` : 'Add details'}</span></button></li>
+    <li><button class="row" data-a="openSheet" data-type="profile"><span>Your details</span><span class="dim">${p.heightCm ? `${p.heightCm} cm, ${p.age}` : 'Add details'}</span></button></li>
   </ul></section>
   <section class="block"><h2>Options</h2><ul class="rows">
     ${isInstalled() ? '' : '<li><button class="row" data-a="openSheet" data-type="installGuide"><span>Add to your Home Screen</span></button></li>'}
@@ -492,19 +492,22 @@ function guideSteps(os) {
   if (os === 'android') {
     return `${ui.installEvent ? '<button class="btn solid guide-install" data-a="installNow">Install Repsolute</button><p class="dim sm center">One tap. Or do it by hand:</p>' : ''}
       <ol class="guide-steps">
-      ${guideStep(1, 'Open the Chrome menu', 'Tap the <b>⋮</b> menu at the top right, then tap <b>Install app</b> or <b>Add to Home screen</b>.', 'android-menu', 'Chrome menu on Android with Install app marked by an arrow')}
-      ${guideStep(2, 'Tap Install', 'Confirm on the screen that pops up.', 'android-install', 'Install confirmation on Android with an Install button')}
-      ${guideStep(3, 'Open it from your home screen', 'Look for the Repsolute icon. It opens full screen, and signing in with Google keeps your data with you everywhere.', 'android-home', 'New app icon on an Android home screen')}
+      ${guideStep(1, 'Open the Chrome menu', 'Tap the <b>⋮</b> button at the top right.', 'android-menu', 'Chrome toolbar on Android with the menu button circled')}
+      ${guideStep(2, 'Tap Add to Home screen', 'Scroll down the menu if you need to. If you see <b>Install app</b> instead, tap that.', 'android-add', 'Chrome menu on Android with Add to Home screen circled')}
+      ${guideStep(3, 'Choose Install', 'Pick <b>Install</b>, not Create shortcut, so it opens full screen like an app.', 'android-choice', 'Add to home screen options on Android with Install circled')}
+      ${guideStep(4, 'Tap Install again', 'Confirm on the pop-up.', 'android-install', 'Install app confirmation on Android with Install circled')}
+      ${guideStep(5, 'Open it from your home screen', 'Look for the Repsolute icon, which can take a moment to appear. Sign in with Google there too, and your data follows you between the site and the app.')}
       </ol>`;
   }
   return `<ol class="guide-steps">
-    ${guideStep(1, 'Tap the Share button', `In Safari, it's the ${i('share')} button at the bottom of the screen. On the newest iPhones, tap ${i('more')} first, then <b>Share</b>.`)}
-    ${guideStep(2, 'Tap Add to Home Screen', 'Scroll down the list to find it. If it isn\'t there, tap <b>View More</b>.', 'ios-add', 'iPhone share menu with Add to Home Screen marked by an arrow')}
-    ${guideStep(3, 'Tap Add', 'Leave <b>Open as Web App</b> switched on if you see it.', 'ios-confirm', 'Add to Home Screen confirmation on iPhone with Add at the top right')}
-    ${guideStep(4, 'Open it from your Home Screen', 'Look for the Repsolute icon and open it. Sign in with Google there too, and your data follows you between the site and the app.', 'ios-home', 'New app icon on an iPhone Home Screen')}
+    ${guideStep(1, 'Tap the Share button', `In Safari, it's the ${i('share')} button at the bottom of the screen. On the newest iPhones, tap ${i('more')} first, then <b>Share</b>.`, 'ios-share', 'Safari toolbar on iPhone with the Share button circled')}
+    ${guideStep(2, 'Tap View More', 'It\'s at the bottom right of the menu. If you can already see <b>Add to Home Screen</b>, skip this step.', 'ios-more', 'iPhone share menu with View More circled')}
+    ${guideStep(3, 'Tap Add to Home Screen', 'Scroll down the list if you need to.', 'ios-add', 'Expanded iPhone share menu with Add to Home Screen circled')}
+    ${guideStep(4, 'Tap Add', 'Leave <b>Open as Web App</b> switched on.', 'ios-confirm', 'Add to Home Screen confirmation on iPhone with Add circled')}
+    ${guideStep(5, 'Open it from your Home Screen', 'Look for the Repsolute icon and open it. Sign in with Google there too, and your data follows you between the site and the app.')}
     </ol>`;
 }
-const guideCredit = '<p class="guide-credit">These screens show a different app, and yours may look a little different. Screenshots by Mozilla Contributors, <a href="https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Installing" target="_blank" rel="noopener">MDN Web Docs</a>, <a href="https://creativecommons.org/licenses/by-sa/2.5/" target="_blank" rel="noopener">CC BY-SA 2.5</a>, cropped.</p>';
+const guideCredit = '<p class="guide-credit">Your screens may look a little different.</p>';
 const guideSwitch = os => `<div class="seg">${[['iphone', 'iPhone'], ['android', 'Android']].map(([k, l]) => `<button class="${os === k ? 'on' : ''}" data-a="guideOs" data-v="${k}">${l}</button>`).join('')}</div>`;
 function viewInstallGuide() {
   const os = ui.guideOs;
@@ -530,7 +533,7 @@ function viewInstallGuide() {
 }
 
 /* ---------- First-time setup ---------- */
-const SETUP_STEPS = 5;
+const SETUP_STEPS = 6;
 const setupField = (label, k, attrs = '') => `<label>${label}<input data-f="setupField" data-k="${k}" id="s-${k}" value="${esc(ui.setup[k])}" ${attrs}></label>`;
 const setupCard = (k, v, on, title, plain, note = '', side = '') => `<button class="plan-card${on ? ' on' : ''}" data-a="setupPick" data-k="${k}" data-v="${v}"><b>${esc(title)}</b>${side ? `<em>${esc(side)}</em>` : ''}<span>${esc(plain)}</span>${note ? `<small>${esc(note)}</small>` : ''}</button>`;
 // The weekly pace for this person, in kg rather than percent.
@@ -548,7 +551,9 @@ function setupStep(s) {
     <div class="plan-cards">${Object.entries(GOALS).filter(([k]) => k !== 'custom').map(([k, g]) => setupCard('goal', k, s.goal === k, g.label, g.plain, goalPace(g, num(s.weight)))).join('')}</div>`;
   if (s.step === 3) return `<h1>How active are you?</h1><p>This helps work out how many calories you burn. Think about a normal week, including your job and workouts. If you're between two, pick the lower one.</p>
     <div class="plan-cards">${ACTIVITY.map(a => setupCard('activity', a.id, s.activity === a.id, a.label, a.plain)).join('')}</div>`;
-  if (s.step === 4) return `<h1>Pick a plan</h1><p>Choose by how many days you can train. You can swap exercises or change plan any time.</p>
+  if (s.step === 4) return `<h1>How much have you trained?</h1><p>This changes what we suggest. You can change it any time.</p>
+    <div class="plan-cards">${LEVELS.map(l => setupCard('level', l.id, s.level === l.id, l.label, l.plain)).join('')}</div>`;
+  if (s.step === 5) return `<h1>Pick a plan</h1><p>Choose by how many days you can train. You can swap exercises or change plan any time.</p>
     <div class="plan-cards">${PROGRAMS.map(p => setupCard('plan', p.key, s.plan === p.key, p.name, p.plain, `Best for: ${p.best}`, p.source)).join('')}</div>`;
   const lock = s.editing ? '' : 'readonly tabindex="-1"';
   return `<h1>Your targets</h1><p>You burn about ${fmt(s.burn)} calories a day, so we suggest ${fmt(s.suggested)} ${esc(GOALS[s.goal].aim)}. The coach fine-tunes this from your real results after ${UNLOCK_WEIGH_INS} weigh-ins and ${UNLOCK_WORKOUTS} workouts.</p>

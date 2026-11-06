@@ -57,7 +57,7 @@ function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(writeS
 function flushSave() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; writeSave(); } }
 
 /* ---------- State ---------- */
-const APP_VERSION = 10; // matches CACHE in sw.js
+const APP_VERSION = 11; // matches CACHE in sw.js
 const THEMES = [
   { id: 'game', name: 'Quest', bar: '#170e33', fx: ['#b78eff', '#dfceff', '#ffffff', '#7f5cff'], shapes: ['star', 'circle'], burst: 1 },
   { id: 'light', name: 'Minimal', bar: '#f7f7f4', fx: ['#17171a', '#8a8a8e', '#c9c9c5'], shapes: ['circle'], burst: 0.6 },
@@ -68,7 +68,7 @@ function defaultState() {
   return {
     v: 2,
     onboarded: false,
-    profile: { name: '', sex: null, age: null, heightCm: null, activity: 'moderate', startDate: null },
+    profile: { name: '', sex: null, age: null, heightCm: null, activity: 'moderate', level: null, startDate: null },
     goal: { mode: 'recomp', lo: GOALS.recomp.lo, hi: GOALS.recomp.hi },
     targets: { kcal: 2500, protein: 160, carbs: 300, fat: 70, sleep: 7.5, water: 3 },
     targetLog: [],
@@ -153,7 +153,7 @@ function migrate(saved) {
 const isInstalled = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 const guideSeen = () => { try { return localStorage.getItem('rq-guide-seen') === '1'; } catch (e) { return true; } };
 const CALC_MS = 1800; // the short "calculating" pause before someone's targets appear
-const freshSetup = () => ({ step: 0, name: '', weight: '', height: '', age: '', sex: '', goal: 'recomp', activity: 'moderate', plan: 'final', kcal: '', protein: '', carbs: '', fat: '' });
+const freshSetup = () => ({ step: 0, name: '', weight: '', height: '', age: '', sex: '', goal: 'recomp', activity: 'moderate', level: 'beginner', plan: 'final', kcal: '', protein: '', carbs: '', fat: '' });
 let state = defaultState();
 const ui = {
   tab: 'today', openedOn: today(), foodDate: today(), logDate: today(), planDay: new Date().getDay(), sheet: null, sheetStack: [],
@@ -191,6 +191,13 @@ function series(field, days = 90) {
   return Object.keys(state.days).filter(k => k >= from && state.days[k][field] != null).sort().map(k => ({ date: k, v: state.days[k][field] }));
 }
 const latestWeight = () => latestMetric('weight')?.v ?? null;
+// What to do next for an exercise. Beginners get a starting weight the first time they meet one.
+function nextFor(e, history) {
+  if (history.length || state.profile.level !== 'beginner') return suggestNext(e, history);
+  const lib = libEntry(e.name);
+  const w = startingWeight(lib, latestWeight(), state.profile.sex);
+  return suggestNext(e, history, w ? { w, each: lib.equip === 'dumbbell' && !ONE_DUMBBELL.has(lib.name) } : null);
+}
 
 // Records a new calorie target. Only calorie and macro changes restart the coach's measuring window.
 function logTargets(reason) {

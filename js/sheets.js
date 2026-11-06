@@ -21,7 +21,7 @@ const SHEETS = {
     const older = date !== today() && date !== yest;
     const past = Object.keys(state.days).filter(k => state.days[k].weight != null).sort().reverse();
     const shown = s.showAll ? past : past.slice(0, WEIGH_INS_SHOWN);
-    return `${sheetHead(cur != null ? 'Edit weight' : 'Log weight', 'Morning, after the bathroom, before food')}
+    return `${sheetHead(cur != null ? 'Edit weight' : 'Log weight', 'First thing in the morning')}
       <div class="seg">${[[today(), 'Today'], [yest, 'Yesterday']].map(([k, l]) => `<button class="${k === date ? 'on' : ''}" data-a="weightDate" data-k="${k}">${l}</button>`).join('')}</div>
       ${older ? `<p class="center weigh-date">${esc(weighDateLabel(date))}</p>` : ''}
       <div class="big-input"><button class="step" data-a="bump" data-t="w-val" data-by="-0.1" aria-label="Down 0.1">−</button>
@@ -253,6 +253,8 @@ const SHEETS = {
         <div class="two">${field('Height, cm', 'p-height', p.heightCm ?? (state.justUpgraded ? 183 : ''), 'inputmode="numeric"')}${field('Age', 'p-age', p.age ?? (state.justUpgraded ? 20 : ''), 'inputmode="numeric"')}</div>
         <label>Sex, for the formula<select id="p-sex"><option value="">Choose</option><option value="male" ${p.sex === 'male' ? 'selected' : ''}>Male</option><option value="female" ${p.sex === 'female' ? 'selected' : ''}>Female</option></select></label>
         <label>Typical activity<select id="p-activity">${ACTIVITY.map(a => `<option value="${a.id}" ${p.activity === a.id ? 'selected' : ''}>${esc(a.brief)}</option>`).join('')}</select></label>
+        <label>Training experience<select id="p-level"><option value="">Choose</option>${LEVELS.map(l => `<option value="${l.id}" ${p.level === l.id ? 'selected' : ''}>${esc(l.label)}</option>`).join('')}</select></label>
+        <p class="sm dim">Beginners get a suggested starting weight for each new exercise.</p>
         ${field('First name', 'p-name', p.name)}
         ${b ? `<p class="sm dim">Resting burn by the Mifflin-St Jeor formula: about ${fmt(b)} kcal a day. ${refLinks(['mifflin90'])}</p>` : ''}
         <button class="btn solid wide" data-a="saveProfile">Save</button></div>`;
@@ -310,7 +312,6 @@ const SHEETS = {
         <li><b>Typical estimates</b><p class="sm dim">About 240 everyday dishes written by hand. Oil and portion size can change them a lot.</p></li>
         <li><b>free-exercise-db</b><p class="sm dim">Exercise instructions and images, released into the public domain under the Unlicense.</p></li>
         <li><b>html5-qrcode</b><p class="sm dim">Barcode reading, Apache 2.0.</p></li>
-        <li><b>Install guide screenshots</b><p class="sm dim">Cropped from MDN Web Docs by Mozilla Contributors, CC BY-SA 2.5.</p></li>
         <li><b>canvas-confetti, Motion and morphdom</b><p class="sm dim">Celebrations, spring physics and smooth screen updates. ISC and MIT licences.</p></li>
         <li><b>Cinzel, Cinzel Decorative, Silkscreen and Instrument Sans</b><p class="sm dim">Typefaces under the SIL Open Font License.</p></li>
       </ul>

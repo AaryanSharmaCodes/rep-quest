@@ -45,6 +45,11 @@ const ACTIVITY = [
   { id: 'moderate', pal: 1.6, label: 'Fairly active', brief: 'Desk day, lifting 3 to 5 times', plain: 'You sit for most of the day, but work out 3 to 5 times a week.' },
   { id: 'high', pal: 1.85, label: 'Very active', brief: 'Active job or daily hard training', plain: 'You are on your feet at work, like a waiter or labourer, or you train hard nearly every day.' },
 ];
+const LEVELS = [
+  { id: 'beginner', label: 'Beginner', plain: 'New to the gym, or under 6 months of regular training. We will suggest starting weights for you.' },
+  { id: 'intermediate', label: 'Intermediate', plain: 'You have trained regularly for 6 months to 2 years and roughly know your weights.' },
+  { id: 'advanced', label: 'Advanced', plain: 'More than 2 years of serious training. You know what to lift.' },
+];
 
 /* ---------- Body weight ---------- */
 // Smoothed weight. About a 10% daily weight on the newest reading, corrected for skipped days.
@@ -239,7 +244,51 @@ const OVERLOAD_MODES = {
 const roundTo = (v, step) => (step > 0 ? Math.round(v / step) * step : v);
 const fixW = w => round(w, 2);
 
-function suggestNext(pe, history) {
+/* ---------- Starting weights for beginners ---------- */
+// First-session guesses as a share of body weight, for a man new to lifting. These are deliberately light judgement
+// calls, not from a study: strength varies widely and machines differ, so the app always says to adjust by feel.
+// Dumbbell shares are per hand. Kept out: anything where a share would mislead, such as assisted pull-ups.
+const START_SHARE = {
+  'chest press': { machine: 0.3, cable: 0.2, barbell: 0.3, 'smith machine': 0.25, dumbbell: 0.1, kettlebell: 0.1 },
+  'incline press': { machine: 0.25, cable: 0.06, barbell: 0.25, 'smith machine': 0.2, dumbbell: 0.08 },
+  'chest fly': { machine: 0.2, cable: 0.06, dumbbell: 0.05 },
+  'vertical pull': { machine: 0.35, cable: 0.35, dumbbell: 0.1, kettlebell: 0.1 },
+  row: { machine: 0.3, cable: 0.3, barbell: 0.3, dumbbell: 0.12, kettlebell: 0.12 },
+  'shoulder press': { machine: 0.2, barbell: 0.25, 'smith machine': 0.2, dumbbell: 0.07, kettlebell: 0.08 },
+  'lateral raise': { machine: 0.1, cable: 0.03, dumbbell: 0.03, kettlebell: 0.05 },
+  'rear delt': { machine: 0.15, cable: 0.04, dumbbell: 0.03, kettlebell: 0.12 },
+  'biceps curl': { machine: 0.12, cable: 0.1, 'ez bar': 0.15, dumbbell: 0.06, kettlebell: 0.08 },
+  triceps: { machine: 0.15, cable: 0.12, barbell: 0.25, 'ez bar': 0.1, dumbbell: 0.08, kettlebell: 0.08 },
+  squat: { machine: 0.6, barbell: 0.3, 'smith machine': 0.3, dumbbell: 0.12, kettlebell: 0.12 },
+  'single leg': { machine: 0.25, dumbbell: 0.05, kettlebell: 0.08 },
+  'leg extension': { machine: 0.25 },
+  'leg curl': { machine: 0.2 },
+  hinge: { barbell: 0.35, dumbbell: 0.12, kettlebell: 0.2 },
+  glute: { machine: 0.4, barbell: 0.4, cable: 0.05, dumbbell: 0.2, kettlebell: 0.12 },
+  calf: { machine: 0.4, dumbbell: 0.08, kettlebell: 0.1 },
+  abs: { machine: 0.2, cable: 0.2 },
+};
+const START_SHARE_BY_NAME = {
+  'Assisted pull-up': null, 'Barbell curl': null, 'T-bar row': null,
+  'Straight-arm pulldown': 0.15, 'Face pull': 0.12, 'Hack squat': 0.3, 'Hack squat or leg press': 0.3,
+  'Overhead cable triceps extension': 0.1, 'Hip abductor machine': 0.3, 'Seated calf raises': 0.2, 'Leg press calf raise': 0.5,
+};
+const ONE_DUMBBELL = new Set(['Goblet squat', 'Overhead triceps extension', 'Dumbbell pullover', 'Dumbbell hip thrust', 'Single-arm dumbbell row']);
+const LOWER_BODY = new Set(['squat', 'single leg', 'leg extension', 'leg curl', 'hinge', 'glute', 'calf']);
+const START_MAX_BODY_WEIGHT = 90; // extra body weight isn't extra strength for someone new to lifting
+
+function startingWeight(lib, weight, sex) {
+  if (!lib || !weight || !sex || !lib.inc) return null;
+  const named = lib.name in START_SHARE_BY_NAME;
+  const share = named ? START_SHARE_BY_NAME[lib.name] : START_SHARE[lib.pattern]?.[lib.equip];
+  if (!share) return null;
+  const sexScale = sex === 'female' ? (LOWER_BODY.has(lib.pattern) ? 0.8 : 0.6) : 1;
+  const kg = Math.min(weight, START_MAX_BODY_WEIGHT) * share * sexScale;
+  // Round down to something the gym actually has. An empty barbell is 20 kg.
+  return fixW(Math.max(Math.floor(kg / lib.inc) * lib.inc, lib.equip === 'barbell' ? 20 : lib.inc));
+}
+
+function suggestNext(pe, history, start = null) {
   const unit = pe.unit === 'sec' ? 'sec' : 'reps';
   // In a live workout sets is the list of sets; in a plan it's a count.
   const planned = Array.isArray(pe.sets) ? Math.max(pe.sets.filter(s => isWorking(s) && s.type !== 'drop').length, 1) : pe.sets || 3;
@@ -249,6 +298,7 @@ function suggestNext(pe, history) {
   const last = history[0];
   if (!last) {
     if (inc === 0) return { kind: 'first', w: null, reps: Array(planned).fill(hi), headline: `Aim for ${lo} to ${hi} ${unit}`, why: `Stop with 1 to 3 ${unit} in reserve.`, options: [], stalled: false };
+    if (start) return { kind: 'first', w: start.w, reps: Array(planned).fill(hi), headline: `Try about ${start.w} kg${start.each ? ' in each hand' : ''} for ${lo} to ${hi} ${unit}`, why: 'A starting guess from your body weight, and machines vary. Go lighter if it feels too heavy, or heavier if it feels easy. Stop with 2 to 3 reps left.', options: [], stalled: false };
     return { kind: 'first', w: null, reps: Array(planned).fill(hi), headline: `Find a weight for ${lo} to ${hi} ${unit}`, why: `Pick a load that leaves 1 to 3 ${unit} in reserve.`, options: [], stalled: false };
   }
   const sets = last.sets.filter(isWorking);

@@ -540,13 +540,13 @@ html[data-theme=arcade] .splash-q { font-size: 23px; line-height: 1.5; }
 .guide-step p { margin-top: 2px; color: var(--dim); font-size: 14px; line-height: 1.45; }
 .guide-step p b { color: var(--ink); font-weight: 600; }
 .guide-step p .ic { width: 18px; height: 18px; vertical-align: -4px; color: var(--ink); }
-.guide-step img { display: block; width: min(62%, 220px); margin: 12px auto 0; border-radius: 12px; border: 1px solid var(--line); }
+.guide-step img { display: block; width: 100%; max-width: 340px; margin: 12px auto 0; border-radius: 12px; border: 1px solid var(--line); }
 .guide-credit { margin-top: 10px; color: var(--dim); font-size: 12px; line-height: 1.45; }
 
 /* ---------- First-time setup ---------- */
 .setup { display: flex; flex-direction: column; gap: 10px; min-height: 86dvh; }
 .setup > p { color: var(--dim); }
-.setup-steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 14px; }
+.setup-steps { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 14px; }
 .setup-steps i { height: 4px; background: var(--track); transition: background-color .3s ease; }
 .setup-steps i.on { background: var(--accent); }
 .setup-foot { position: sticky; z-index: 5; bottom: calc(env(safe-area-inset-bottom) + 12px); display: flex; gap: 10px; margin-top: auto; padding-top: 16px; }

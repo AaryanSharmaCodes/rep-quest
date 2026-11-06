@@ -204,7 +204,7 @@ function startWorkout(day) {
 }
 function targetsForSet(e, si) {
   const hist = exerciseHistory(state.workouts, e.name, 6);
-  const n = suggestNext(e, hist);
+  const n = nextFor(e, hist);
   const opt = n.options.find(o => o.id === (e.chosen || n.chosen));
   let idx = 0;
   for (let x = 0; x < si; x++) if (isWorking(e.sets[x]) && e.sets[x].type !== 'drop') idx++;
@@ -393,7 +393,11 @@ const A = {
   },
   setupGo(d) { ui.setup.step = Number(d.n); ui.enter = true; haptic(); render(); window.scrollTo(0, 0); },
   setupBack() { A.setupGo({ n: ui.setup.step - 1 }); },
-  setupPick(d) { ui.setup[d.k] = d.v; haptic(); render(); },
+  setupPick(d) {
+    ui.setup[d.k] = d.v;
+    if (d.k === 'plan') ui.setup.planPicked = true;
+    haptic(); render();
+  },
   setupEdit() {
     ui.setup.editing = !ui.setup.editing;
     if (!ui.setup.editing) document.activeElement?.blur(); // updates skip the box in focus, so let go of it first
@@ -417,11 +421,13 @@ const A = {
       setTimeout(() => { if (ui.setup !== s) return; s.calculating = false; A.setupGo({ n: SETUP_STEPS }); }, CALC_MS);
       return;
     }
+    // The plan page comes next: start beginners on the plan that suits them, unless they already chose.
+    if (s.step === SETUP_STEPS - 2 && !s.planPicked) s.plan = s.level === 'beginner' ? 'fb3' : 'final';
     if (s.step < SETUP_STEPS) { A.setupGo({ n: s.step + 1 }); return; }
     const kcal = num(s.kcal), protein = num(s.protein), carbs = num(s.carbs), fat = num(s.fat);
     if ([kcal, protein, carbs, fat].some(x => x == null || x < 0)) { toast('Fill in every target'); return; }
     const start = today();
-    state.profile = { ...state.profile, name: s.name.trim(), heightCm: height, age, sex: s.sex, activity: s.activity, startDate: start };
+    state.profile = { ...state.profile, name: s.name.trim(), heightCm: height, age, sex: s.sex, activity: s.activity, level: s.level, startDate: start };
     state.goal = { mode: s.goal, lo: GOALS[s.goal].lo, hi: GOALS[s.goal].hi };
     state.program = makeProgram(s.plan);
     state.targets = { ...state.targets, kcal, protein, carbs, fat };
@@ -855,7 +861,13 @@ const A = {
     closeSheet();
   },
   switchProgram(d) {
-    if (state.active) { toast('Finish your workout first'); return; }
+    if (state.active) {
+      const logged = state.active.exercises.some(e => e.sets.some(x => x.done));
+      if (logged && !confirm('Switch plans and discard this workout? The sets you logged will not be saved.')) return;
+      state.active = null;
+      stopRest();
+      releaseWake();
+    }
     state.programArchive = state.programArchive || {};
     state.programArchive[state.program.key] = state.program;
     state.program = restoreFromArchive(d.key) || makeProgram(d.key);
@@ -885,7 +897,7 @@ const A = {
   saveProfile() {
     const p = state.profile;
     p.heightCm = num(v('p-height')); p.age = num(v('p-age'));
-    p.sex = v('p-sex') || null; p.activity = v('p-activity'); p.name = v('p-name').trim();
+    p.sex = v('p-sex') || null; p.activity = v('p-activity'); p.level = v('p-level') || null; p.name = v('p-name').trim();
     if (p.heightCm && p.age && p.sex) state.needsDetails = false;
     state.justUpgraded = false;
     closeSheet();
