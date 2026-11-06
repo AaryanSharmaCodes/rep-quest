@@ -500,7 +500,13 @@ const A = {
     haptic();
     Motion.pop(el);
   },
-  weightDate(d) { ui.sheet.date = d.k; render(); },
+  weightDate(d) {
+    ui.sheet.date = d.k;
+    document.activeElement?.blur(); // updates skip the box in focus, and it must show this day's weight
+    haptic(); render();
+    document.querySelector('#sheet .panel')?.scrollTo({ top: 0, behavior: 'smooth' });
+  },
+  weightShowAll() { ui.sheet.showAll = true; haptic(); render(); },
   saveWeight(d) {
     const w = num(v('w-val'));
     if (w == null || w < 20 || w > 400) { toast('Enter a weight in kg'); return; }
@@ -512,7 +518,7 @@ const A = {
     refreshCoachAlert();
     commit();
   },
-  clearWeight(d) { delete getDay(d.k).weight; closeSheet(); },
+  clearWeight(d) { delete getDay(d.k).weight; refreshCoachAlert(); closeSheet(); },
   logDay(d) { ui.sheet.date = addDays(ui.sheet.date || today(), Number(d.n)); render(); },
   async checkUpdate() {
     if (!swReg) { toast('Updates are off here'); return; }
@@ -983,6 +989,7 @@ const FIELD = {
     scheduleSave();
   },
   setupField(d, el) { ui.setup[d.k] = el.value; },
+  weightDay(d, el) { if (el.value && el.value <= today()) { ui.sheet.date = el.value; render(); } },
   setting(d, el) { state.settings[d.k] = el.checked; scheduleSave(); if (d.k === 'animations') Motion.refresh(); },
   liftChart(d, el) { ui.liftChart = el.value; render(); },
   targetCheck() { refreshMacroSum(); },

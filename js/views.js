@@ -397,6 +397,7 @@ function viewProgress() {
     <div class="seg" role="tablist">${ranges.map(([v, l]) => `<button class="${v === range ? 'on' : ''}" data-a="setRange" data-v="${v}">${l}</button>`).join('')}</div>
     ${lineChart({ id: 'weight', points: shown, lineKey: 't', showRaw: true, unit: 'kg', height: 210, emptyText: 'Your weight line appears here.' })}
     <p class="legend"><i class="lg-line"></i> Trend <i class="lg-dot"></i> Scale readings</p>
+    ${now ? '<button class="link strong" data-a="openSheet" data-type="weight">Edit past weigh-ins</button>' : ''}
   </section>
   ${coachPanel(c)}
   ${tips.length ? `<section class="block"><h2>Recommendations</h2><ul class="advice">${tips.map(adviceRow).join('')}</ul></section>` : ''}

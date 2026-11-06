@@ -4,19 +4,34 @@ const sheetHead = (title, sub = '') => `<div class="sh-head">${ui.sheetStack.len
 const field = (label, id, value, attrs = '') => `<label>${esc(label)}<input id="${id}" value="${esc(value ?? '')}" ${attrs}></label>`;
 const slotName = s => (SLOTS.find(x => x[0] === s) || [s, s])[1];
 
+const WEIGH_INS_SHOWN = 10;
+function weighDateLabel(k) {
+  if (k === today()) return 'Today';
+  if (k === addDays(today(), -1)) return 'Yesterday';
+  const d = parseKey(k), sameYear = d.getFullYear() === parseKey(today()).getFullYear();
+  return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }) });
+}
+
 const SHEETS = {
   weight(s) {
     const date = s.date || today();
     const cur = peekDay(date).weight;
     const start = cur ?? latestWeight() ?? '';
     const yest = addDays(today(), -1);
-    return `${sheetHead('Log weight', 'Morning, after the bathroom, before food')}
+    const older = date !== today() && date !== yest;
+    const past = Object.keys(state.days).filter(k => state.days[k].weight != null).sort().reverse();
+    const shown = s.showAll ? past : past.slice(0, WEIGH_INS_SHOWN);
+    return `${sheetHead(cur != null ? 'Edit weight' : 'Log weight', 'Morning, after the bathroom, before food')}
       <div class="seg">${[[today(), 'Today'], [yest, 'Yesterday']].map(([k, l]) => `<button class="${k === date ? 'on' : ''}" data-a="weightDate" data-k="${k}">${l}</button>`).join('')}</div>
+      ${older ? `<p class="center weigh-date">${esc(weighDateLabel(date))}</p>` : ''}
       <div class="big-input"><button class="step" data-a="bump" data-t="w-val" data-by="-0.1" aria-label="Down 0.1">−</button>
         <input id="w-val" inputmode="decimal" value="${esc(start)}" aria-label="Weight in kg"><button class="step" data-a="bump" data-t="w-val" data-by="0.1" aria-label="Up 0.1">+</button></div>
       <p class="center dim">kg</p>
-      <button class="btn solid wide" data-a="saveWeight" data-k="${date}">Save weight</button>
-      ${cur != null ? `<button class="link danger block-link" data-a="clearWeight" data-k="${date}">Remove this weigh-in</button>` : ''}`;
+      <button class="btn solid wide" data-a="saveWeight" data-k="${date}">${cur != null ? 'Update weight' : 'Save weight'}</button>
+      ${cur != null ? `<button class="link danger block-link" data-a="clearWeight" data-k="${date}">Remove this weigh-in</button>` : ''}
+      <div class="targets-head"><h3 class="sh-sub">Past weigh-ins</h3><label class="link strong weigh-pick">Pick a date<input type="date" data-f="weightDay" max="${today()}" value="${date}" aria-label="Pick a date"></label></div>
+      ${past.length ? `<ul class="weigh-list">${shown.map(k => `<li><button class="row${k === date ? ' on' : ''}" data-a="weightDate" data-k="${k}"><span>${esc(weighDateLabel(k))}</span><span class="dim">${state.days[k].weight} kg</span></button></li>`).join('')}</ul>
+      ${past.length > shown.length ? `<button class="link strong block-link" data-a="weightShowAll">Show all ${past.length}</button>` : ''}` : '<p class="dim sm">Your weigh-ins will appear here. Tap one to change it.</p>'}`;
   },
   log(s) {
     const date = s.date || today(), d = peekDay(date);
