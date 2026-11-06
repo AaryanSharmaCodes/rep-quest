@@ -53,7 +53,7 @@ function render() {
   ui.enter = false;
   app.classList.remove('enter'); // a re-render mid-entrance must not replay it
   const html = onWelcome ? viewWelcome() : VIEWS[ui.tab]();
-  const screen = onWelcome ? `setup-${ui.setup.step}-${guideSeen()}-${ui.guideOs}` : `${ui.tab}-${!!state.active}`;
+  const screen = onWelcome ? `setup-${ui.setup.step}-${!!ui.setup.calculating}-${guideSeen()}-${ui.guideOs}` : `${ui.tab}-${!!state.active}`;
   // Same screen: change only what changed. New screen: draw it fresh.
   if (!entering && ui.screen === screen && app.firstChild) Motion.morph(app, html);
   else app.innerHTML = html;
@@ -340,7 +340,7 @@ async function importFile(file) {
     ui.sheet = null; ui.sheetStack = [];
     toast('Backup restored');
     commit();
-  } catch (e) { toast('That file is not a Rep Quest backup'); }
+  } catch (e) { toast('That file is not a Repsolute backup'); }
 }
 
 /* ---------- Actions ---------- */
@@ -388,12 +388,18 @@ const A = {
     prompt.prompt();
     const { outcome } = await prompt.userChoice;
     ui.installEvent = null;
-    if (outcome === 'accepted') toast('Installed. Open Rep Quest from your home screen.');
+    if (outcome === 'accepted') toast('Installed. Open Repsolute from your home screen.');
     render();
   },
   setupGo(d) { ui.setup.step = Number(d.n); ui.enter = true; haptic(); render(); window.scrollTo(0, 0); },
   setupBack() { A.setupGo({ n: ui.setup.step - 1 }); },
   setupPick(d) { ui.setup[d.k] = d.v; haptic(); render(); },
+  setupEdit() {
+    ui.setup.editing = !ui.setup.editing;
+    if (!ui.setup.editing) document.activeElement?.blur(); // updates skip the box in focus, so let go of it first
+    haptic(); render();
+    if (ui.setup.editing) document.getElementById('s-kcal')?.focus();
+  },
   setupNext() {
     const s = ui.setup, weight = num(s.weight), height = num(s.height), age = num(s.age);
     if (s.step === 1) {
@@ -402,11 +408,16 @@ const A = {
       if (age == null || age < 10 || age > 110) { toast('Enter your age'); return; }
       if (!s.sex) { toast('Choose one so the formula can work'); return; }
     }
-    if (s.step === 3) {
-      const t = suggestTargets({ heightCm: height, age, sex: s.sex, activity: s.activity }, weight, GOALS[s.goal]);
-      Object.assign(s, t);
+    if (s.calculating) return;
+    if (s.step === SETUP_STEPS - 1) {
+      const profile = { heightCm: height, age, sex: s.sex, activity: s.activity };
+      const t = suggestTargets(profile, weight, GOALS[s.goal]);
+      Object.assign(s, t, { burn: Math.round(formulaTDEE(profile, weight) / 50) * 50, suggested: t.kcal, editing: false, calculating: true });
+      ui.enter = true; haptic(); render(); window.scrollTo(0, 0);
+      setTimeout(() => { if (ui.setup !== s) return; s.calculating = false; A.setupGo({ n: SETUP_STEPS }); }, CALC_MS);
+      return;
     }
-    if (s.step < 4) { A.setupGo({ n: s.step + 1 }); return; }
+    if (s.step < SETUP_STEPS) { A.setupGo({ n: s.step + 1 }); return; }
     const kcal = num(s.kcal), protein = num(s.protein), carbs = num(s.carbs), fat = num(s.fat);
     if ([kcal, protein, carbs, fat].some(x => x == null || x < 0)) { toast('Fill in every target'); return; }
     const start = today();

@@ -231,13 +231,13 @@ const SHEETS = {
   /* ---------- Settings ---------- */
   profile(s) {
     const p = state.profile, w = latestWeight();
-    const intro = state.justUpgraded ? `<p>Rep Quest has a new look, a bigger food database and a smarter coach. All your data came across. Check these details so the coach can start from a sensible estimate.</p>` : '';
+    const intro = state.justUpgraded ? `<p>Repsolute has a new look, a bigger food database and a smarter coach. All your data came across. Check these details so the coach can start from a sensible estimate.</p>` : '';
     const b = bmr({ ...p, sex: p.sex }, w);
     return `${sheetHead(state.justUpgraded ? 'Welcome back' : 'Your details')}${intro}
       <div class="form">
         <div class="two">${field('Height, cm', 'p-height', p.heightCm ?? (state.justUpgraded ? 183 : ''), 'inputmode="numeric"')}${field('Age', 'p-age', p.age ?? (state.justUpgraded ? 20 : ''), 'inputmode="numeric"')}</div>
         <label>Sex, for the formula<select id="p-sex"><option value="">Choose</option><option value="male" ${p.sex === 'male' ? 'selected' : ''}>Male</option><option value="female" ${p.sex === 'female' ? 'selected' : ''}>Female</option></select></label>
-        <label>Typical activity<select id="p-activity">${ACTIVITY.map(a => `<option value="${a.id}" ${p.activity === a.id ? 'selected' : ''}>${esc(a.label)}</option>`).join('')}</select></label>
+        <label>Typical activity<select id="p-activity">${ACTIVITY.map(a => `<option value="${a.id}" ${p.activity === a.id ? 'selected' : ''}>${esc(a.brief)}</option>`).join('')}</select></label>
         ${field('First name', 'p-name', p.name)}
         ${b ? `<p class="sm dim">Resting burn by the Mifflin-St Jeor formula: about ${fmt(b)} kcal a day. ${refLinks(['mifflin90'])}</p>` : ''}
         <button class="btn solid wide" data-a="saveProfile">Save</button></div>`;
@@ -280,7 +280,7 @@ const SHEETS = {
       <h3 class="sh-sub">Choices made in this app</h3>
       <ul class="plain-list sm">
         <li>${fmt(KCAL_PER_KG)} kcal per kg of weight change. The classic 7,700 assumes pure fat, while measured values run lower.</li>
-        <li>The recomp range is a working choice, not from a study, since none pins an exact rate.</li>
+        <li>The recomp and bulk ranges are working choices, not from a study, since none pins an exact rate.</li>
         <li>Reliability numbers (formula within about ${PRIOR_SD} kcal, food logs within 120 to 350) are reasoned estimates.</li>
         <li>Estimated one-rep max uses the Epley formula, widely used but less accurate at high reps.</li></ul>
       <h3 class="sh-sub">Research used</h3>

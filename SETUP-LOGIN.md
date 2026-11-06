@@ -1,6 +1,6 @@
 # Setting up Google login
 
-Rep Quest uses Firebase's free plan for sign-in and storage. The live project is already set up, and these steps are for rebuilding it. If `FIREBASE` in `js/cloud.js` is empty, the app works on the device only and hides the Google button.
+Repsolute uses Firebase's free plan for sign-in and storage. The live project is already set up, and these steps are for rebuilding it. If `FIREBASE` in `js/cloud.js` is empty, the app works on the device only and hides the Google button.
 
 1. Create a project at https://console.firebase.google.com (no billing needed).
 2. Build > Authentication > Get started > Google > Enable, then save.

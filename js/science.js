@@ -34,15 +34,16 @@ const CONFIDENCE_Z = 1.28;         // act when about 90% sure the rate is outsid
 const MAX_STEP = 200, MIN_STEP = 75; // the plan's rule: adjust by 150 to 200 kcal at a time
 
 const GOALS = {
-  recomp: { label: 'Recomp', lo: -0.25, hi: 0.1, says: 'Build muscle while your weight stays about the same or falls slowly. No study pins an exact rate, so this band is a working choice you can edit.', refs: [] },
-  gain: { label: 'Lean gain', lo: 0.25, hi: 0.5, says: 'Gain slowly to keep fat low.', refs: ['iraki19'] },
-  cut: { label: 'Cut', lo: -1, hi: -0.5, says: 'Lose fat while keeping muscle.', refs: ['helms14', 'murphy22'] },
+  cut: { label: 'Lose weight', aim: 'to lose weight', plain: 'Eat less than you burn, so your body uses stored fat. Also called a cut.', lo: -1, hi: -0.5, says: 'Lose fat while keeping muscle.', refs: ['helms14', 'murphy22'] },
+  bulk: { label: 'Bulk', aim: 'for a bulk', plain: 'Eat well above what you burn to build muscle faster. You will gain some fat too.', lo: 0.5, hi: 1, says: 'Gain faster to build muscle, accepting more fat. No study pins an exact rate, so this band is a working choice you can edit.', refs: [] },
+  gain: { label: 'Lean gain', aim: 'for a lean gain', plain: 'Eat slightly more than you burn. Muscle comes slower than a bulk, with less fat.', lo: 0.25, hi: 0.5, says: 'Gain slowly to keep fat low.', refs: ['iraki19'] },
+  recomp: { label: 'Recomp', aim: 'for a recomp', plain: 'Short for body recomposition. Eat about what you burn to build muscle and lose fat at the same time.', lo: -0.25, hi: 0.1, says: 'Build muscle while your weight stays about the same or falls slowly. No study pins an exact rate, so this band is a working choice you can edit.', refs: [] },
   custom: { label: 'Custom', lo: -0.1, hi: 0.1, says: 'Pick your own weekly range.', refs: [] },
 };
 const ACTIVITY = [
-  { id: 'light', pal: 1.4, label: 'Mostly sitting, little exercise' },
-  { id: 'moderate', pal: 1.6, label: 'Desk day, lifting 3 to 5 times' },
-  { id: 'high', pal: 1.85, label: 'Active job or daily hard training' },
+  { id: 'light', pal: 1.4, label: 'Not very active', brief: 'Mostly sitting, little exercise', plain: 'You sit for most of the day, like at a desk or in class, and rarely work out.' },
+  { id: 'moderate', pal: 1.6, label: 'Fairly active', brief: 'Desk day, lifting 3 to 5 times', plain: 'You sit for most of the day, but work out 3 to 5 times a week.' },
+  { id: 'high', pal: 1.85, label: 'Very active', brief: 'Active job or daily hard training', plain: 'You are on your feet at work, like a waiter or labourer, or you train hard nearly every day.' },
 ];
 
 /* ---------- Body weight ---------- */

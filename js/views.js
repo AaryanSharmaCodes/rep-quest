@@ -489,18 +489,18 @@ function viewYou() {
 const guideStep = (n, title, text, img, alt) => `<li class="guide-step"><div class="guide-text"><span class="guide-n">${n}</span><div><h3>${title}</h3><p>${text}</p></div></div>${img ? `<img src="guide/${img}.jpg" alt="${alt}" loading="lazy">` : ''}</li>`;
 function guideSteps(os) {
   if (os === 'android') {
-    return `${ui.installEvent ? '<button class="btn solid guide-install" data-a="installNow">Install Rep Quest</button><p class="dim sm center">One tap. Or do it by hand:</p>' : ''}
+    return `${ui.installEvent ? '<button class="btn solid guide-install" data-a="installNow">Install Repsolute</button><p class="dim sm center">One tap. Or do it by hand:</p>' : ''}
       <ol class="guide-steps">
       ${guideStep(1, 'Open the Chrome menu', 'Tap the <b>⋮</b> menu at the top right, then tap <b>Install app</b> or <b>Add to Home screen</b>.', 'android-menu', 'Chrome menu on Android with Install app marked by an arrow')}
       ${guideStep(2, 'Tap Install', 'Confirm on the screen that pops up.', 'android-install', 'Install confirmation on Android with an Install button')}
-      ${guideStep(3, 'Open it from your home screen', 'Look for the Rep Quest icon. It opens full screen, and signing in with Google keeps your data with you everywhere.', 'android-home', 'New app icon on an Android home screen')}
+      ${guideStep(3, 'Open it from your home screen', 'Look for the Repsolute icon. It opens full screen, and signing in with Google keeps your data with you everywhere.', 'android-home', 'New app icon on an Android home screen')}
       </ol>`;
   }
   return `<ol class="guide-steps">
     ${guideStep(1, 'Tap the Share button', `In Safari, it's the ${i('share')} button at the bottom of the screen. On the newest iPhones, tap ${i('more')} first, then <b>Share</b>.`)}
     ${guideStep(2, 'Tap Add to Home Screen', 'Scroll down the list to find it. If it isn\'t there, tap <b>View More</b>.', 'ios-add', 'iPhone share menu with Add to Home Screen marked by an arrow')}
     ${guideStep(3, 'Tap Add', 'Leave <b>Open as Web App</b> switched on if you see it.', 'ios-confirm', 'Add to Home Screen confirmation on iPhone with Add at the top right')}
-    ${guideStep(4, 'Open it from your Home Screen', 'Look for the Rep Quest icon and open it. Sign in with Google there too, and your data follows you between the site and the app.', 'ios-home', 'New app icon on an iPhone Home Screen')}
+    ${guideStep(4, 'Open it from your Home Screen', 'Look for the Repsolute icon and open it. Sign in with Google there too, and your data follows you between the site and the app.', 'ios-home', 'New app icon on an iPhone Home Screen')}
     </ol>`;
 }
 const guideCredit = '<p class="guide-credit">These screens show a different app, and yours may look a little different. Screenshots by Mozilla Contributors, <a href="https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Installing" target="_blank" rel="noopener">MDN Web Docs</a>, <a href="https://creativecommons.org/licenses/by-sa/2.5/" target="_blank" rel="noopener">CC BY-SA 2.5</a>, cropped.</p>';
@@ -510,7 +510,7 @@ function viewInstallGuide() {
   if (!os) {
     return `<section class="welcome guide-ask">
       <h1>Make it an app</h1>
-      <p>Rep Quest lives on your Home Screen, opens full screen and works offline. It takes about 20 seconds, with nothing to download from a store.</p>
+      <p>Repsolute lives on your Home Screen, opens full screen and works offline. It takes about 20 seconds, with nothing to download from a store.</p>
       <h3 class="sh-sub">Which phone do you have?</h3>
       <div class="plan-cards">
         <button class="plan-card" data-a="guideOs" data-v="iphone"><b>iPhone</b><span>Using Safari</span></button>
@@ -529,35 +529,46 @@ function viewInstallGuide() {
 }
 
 /* ---------- First-time setup ---------- */
+const SETUP_STEPS = 5;
 const setupField = (label, k, attrs = '') => `<label>${label}<input data-f="setupField" data-k="${k}" id="s-${k}" value="${esc(ui.setup[k])}" ${attrs}></label>`;
+const setupCard = (k, v, on, title, plain, note = '', side = '') => `<button class="plan-card${on ? ' on' : ''}" data-a="setupPick" data-k="${k}" data-v="${v}"><b>${esc(title)}</b>${side ? `<em>${esc(side)}</em>` : ''}<span>${esc(plain)}</span>${note ? `<small>${esc(note)}</small>` : ''}</button>`;
+// The weekly pace for this person, in kg rather than percent.
+function goalPace(g, weight) {
+  if (g.lo < 0 && g.hi > 0) return 'Your weight stays about the same';
+  const [a, b] = [g.lo, g.hi].map(x => Math.abs(x) * weight / 100).sort((x, y) => x - y);
+  return `${g.hi < 0 ? 'Lose' : 'Gain'} about ${round(a, 1)} to ${round(b, 1)} kg a week`;
+}
 function setupStep(s) {
   if (s.step === 1) return `<h1>About you</h1><p>These set your starting calories, and you can change them any time.</p>
     <div class="form">${setupField('First name', 'name', 'autocomplete="given-name"')}
       <div class="two">${setupField('Weight, kg', 'weight', 'inputmode="decimal"')}${setupField('Height, cm', 'height', 'inputmode="numeric"')}</div>
       <div class="two">${setupField('Age', 'age', 'inputmode="numeric"')}<div class="field-label">Sex, for the formula<div class="seg">${[['male', 'Male'], ['female', 'Female']].map(([k, l]) => `<button class="${s.sex === k ? 'on' : ''}" data-a="setupPick" data-k="sex" data-v="${k}">${l}</button>`).join('')}</div></div></div></div>`;
-  if (s.step === 2) return `<h1>Your goal</h1><p>Set by how fast your weight should move, with no goal weight needed.</p>
-    <div class="choice col setup-choice">${Object.entries(GOALS).filter(([k]) => k !== 'custom').map(([k, g]) => `<button class="${s.goal === k ? 'on' : ''}" data-a="setupPick" data-k="goal" data-v="${k}"><b>${esc(g.label)}</b><span>${signed(g.lo, 2)} to ${signed(g.hi, 2)}% a week</span></button>`).join('')}</div>
-    <h3 class="sh-sub">How active are you?</h3>
-    <div class="choice col setup-choice">${ACTIVITY.map(a => `<button class="${s.activity === a.id ? 'on' : ''}" data-a="setupPick" data-k="activity" data-v="${a.id}"><b>${esc(a.label)}</b></button>`).join('')}</div>`;
-  if (s.step === 3) return `<h1>Pick a plan</h1><p>You can edit it, swap exercises or switch plans later.</p>
-    <div class="plan-cards">${PROGRAMS.map(p => `<button class="plan-card${s.plan === p.key ? ' on' : ''}" data-a="setupPick" data-k="plan" data-v="${p.key}"><b>${esc(p.name)}</b><em>${esc(p.source)}</em><span>${esc(p.says)}</span></button>`).join('')}</div>`;
-  return `<h1>Your targets</h1><p>Worked out from your details. The coach fine-tunes them from your real data after 10 weigh-ins and 4 workouts.</p>
-    <div class="form">${setupField('Calories', 'kcal', 'inputmode="numeric"')}
-      <div class="three">${setupField('Protein, g', 'protein', 'inputmode="numeric"')}${setupField('Carbs, g', 'carbs', 'inputmode="numeric"')}${setupField('Fat, g', 'fat', 'inputmode="numeric"')}</div></div>
+  if (s.step === 2) return `<h1>Your goal</h1><p>What do you want to do right now? You can change this any time.</p>
+    <div class="plan-cards">${Object.entries(GOALS).filter(([k]) => k !== 'custom').map(([k, g]) => setupCard('goal', k, s.goal === k, g.label, g.plain, goalPace(g, num(s.weight)))).join('')}</div>`;
+  if (s.step === 3) return `<h1>How active are you?</h1><p>This helps work out how many calories you burn. Think about a normal week, including your job and workouts. If you're between two, pick the lower one.</p>
+    <div class="plan-cards">${ACTIVITY.map(a => setupCard('activity', a.id, s.activity === a.id, a.label, a.plain)).join('')}</div>`;
+  if (s.step === 4) return `<h1>Pick a plan</h1><p>Choose by how many days you can train. You can swap exercises or change plan any time.</p>
+    <div class="plan-cards">${PROGRAMS.map(p => setupCard('plan', p.key, s.plan === p.key, p.name, p.plain, `Best for: ${p.best}`, p.source)).join('')}</div>`;
+  const lock = s.editing ? '' : 'readonly tabindex="-1"';
+  return `<h1>Your targets</h1><p>You burn about ${fmt(s.burn)} calories a day, so we suggest ${fmt(s.suggested)} ${esc(GOALS[s.goal].aim)}. The coach fine-tunes this from your real results after ${UNLOCK_WEIGH_INS} weigh-ins and ${UNLOCK_WORKOUTS} workouts.</p>
+    <div class="targets-head"><h3 class="sh-sub">Your daily targets</h3><button class="link strong" data-a="setupEdit">${s.editing ? 'Done' : 'Edit'}</button></div>
+    <div class="form${s.editing ? '' : ' locked'}">${setupField('Calories', 'kcal', `inputmode="numeric" ${lock}`)}
+      <div class="three">${setupField('Protein, g', 'protein', `inputmode="numeric" ${lock}`)}${setupField('Carbs, g', 'carbs', `inputmode="numeric" ${lock}`)}${setupField('Fat, g', 'fat', `inputmode="numeric" ${lock}`)}</div></div>
+    <p class="sm dim">Protein builds muscle. Carbs fuel your workouts. Fat supports your hormones.</p>
     <h3 class="sh-sub">Choose a look</h3>
     <div class="themes">${THEMES.map(t => `<button class="theme-card${state.settings.theme === t.id ? ' on' : ''}" data-a="setTheme" data-v="${t.id}"><span class="tc tc-${t.id}"><i></i><i></i><i></i></span><b>${t.name}</b></button>`).join('')}</div>`;
 }
 function viewWelcome() {
   const me = Cloud.user();
   if (me && !Cloud.pulled()) {
-    return `<section class="welcome"><h1>Rep Quest</h1><p>Loading your account...</p><button class="link strong" data-a="cloudRetry">Try again</button></section>`;
+    return `<section class="welcome"><h1>Repsolute</h1><p>Loading your account...</p><button class="link strong" data-a="cloudRetry">Try again</button></section>`;
   }
   const s = ui.setup;
   if (!me && s.step < 1 && !isInstalled() && !guideSeen()) return viewInstallGuide();
   if (me && s.step < 1) { s.step = 1; s.name = s.name || (me.name || '').split(' ')[0]; }
   if (s.step < 1) {
     return `<section class="welcome">
-      <h1>Rep Quest</h1>
+      <h1>Repsolute</h1>
       <p>Clear your quests every day: train, hit protein and calories, weigh in. Your numbers steer the plan.</p>
       ${Cloud.enabled() ? `<button class="btn google" data-a="cloudSignIn">${GOOGLE_G} Continue with Google</button>` : ''}
       <button class="btn line" data-a="setupGo" data-n="1">Start without an account</button>
@@ -565,9 +576,10 @@ function viewWelcome() {
       <input type="file" id="restore-file" accept="application/json,.json" hidden>
     </section>`;
   }
+  if (s.calculating) return `<section class="setup-calc" role="status"><div class="calc-ring"></div><h1>Calculating your caloric goals</h1><p>Using your details, goal and activity</p></section>`;
   return `<section class="setup">
-    <div class="setup-steps" aria-label="Step ${s.step} of 4">${[1, 2, 3, 4].map(n => `<i class="${n <= s.step ? 'on' : ''}"></i>`).join('')}</div>
+    <div class="setup-steps" aria-label="Step ${s.step} of ${SETUP_STEPS}">${Array.from({ length: SETUP_STEPS }, (_, i) => i + 1).map(n => `<i class="${n <= s.step ? 'on' : ''}"></i>`).join('')}</div>
     ${setupStep(s)}
-    <div class="setup-foot">${s.step > (me ? 1 : 0) ? '<button class="btn line" data-a="setupBack">Back</button>' : ''}<button class="btn solid" data-a="setupNext">${s.step === 4 ? 'Start' : 'Next'}</button></div>
+    <div class="setup-foot">${s.step > (me ? 1 : 0) ? '<button class="btn line" data-a="setupBack">Back</button>' : ''}<button class="btn solid" data-a="setupNext">${s.step === SETUP_STEPS ? 'Start' : 'Next'}</button></div>
   </section>`;
 }

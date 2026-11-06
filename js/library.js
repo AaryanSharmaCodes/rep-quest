@@ -253,7 +253,7 @@ const D = (name, rows) => ({ id: uid(), name, exercises: rows.map(r => planRow(.
 // Pre-built programs. New people pick one during setup, and anyone can switch later.
 const PROGRAMS = [
   {
-    key: 'final', name: "Founder's plan", source: '5 days a week', says: 'Upper, lower, push, pull, then legs and arms. Extra attention on shoulders and upper chest.',
+    key: 'final', name: "Founder's plan", source: '5 days a week', plain: 'The plan our founder follows. Upper body, lower body, chest and shoulders, back and biceps, then legs and arms.', best: 'People who can train 5 days a week and want bigger shoulders and upper chest.', says: 'Upper, lower, push, pull, then legs and arms. Extra attention on shoulders and upper chest.',
     make() {
       const mon = D('Upper body', [['Machine chest press', 3, 6, 10], ['Lat pulldown', 3, 8, 12], ['Chest-supported row', 3, 8, 12], ['Incline dumbbell press', 2, 8, 12], ['Cable lateral raises', 3, 12, 20], ['EZ-bar biceps curls', 2, 10, 12], ['Rope triceps pushdown', 2, 10, 15]]);
       const tue = D('Lower body', [['Leg press', 3, 8, 12], ['Seated leg curl', 3, 10, 15], ['Leg extension', 3, 10, 15], ['Bulgarian split squat', 2, 8, 12], ['Standing calf raises', 3, 12, 15], ['Cable crunches', 3, 12, 15]]);
@@ -264,7 +264,7 @@ const PROGRAMS = [
     },
   },
   {
-    key: 'ul4', name: 'Upper / lower, 4 days', source: '4 days a week', says: 'Four good sessions beat five rushed ones. A good fit when recovery or time is short.',
+    key: 'ul4', name: 'Upper / lower, 4 days', source: '4 days a week', plain: 'Two upper-body days and two lower-body days each week, with time to recover in between.', best: 'Most people. A good balance of training and rest.', says: 'Four good sessions beat five rushed ones. A good fit when recovery or time is short.',
     make() {
       const a = D('Upper 1', [['Machine chest press', 3, 6, 10], ['Lat pulldown', 3, 8, 12], ['Chest-supported row', 3, 8, 12], ['Machine shoulder press', 2, 8, 12], ['Cable lateral raises', 4, 12, 20], ['EZ-bar biceps curls', 2, 10, 12], ['Rope triceps pushdown', 2, 10, 15]]);
       const b = D('Lower 1', [['Leg press', 3, 8, 12], ['Seated leg curl', 3, 10, 15], ['Leg extension', 2, 10, 15], ['Standing calf raises', 3, 12, 15], ['Cable crunches', 3, 12, 15]]);
@@ -274,7 +274,7 @@ const PROGRAMS = [
     },
   },
   {
-    key: 'ppl6', name: 'Push, pull, legs, 6 days', source: '6 days a week', says: 'Each muscle twice a week with more total sets. Only worth it if sleep and recovery are solid.',
+    key: 'ppl6', name: 'Push, pull, legs, 6 days', source: '6 days a week', plain: 'Push days train chest, shoulders and triceps. Pull days train back and biceps. Then legs. You do all three twice a week.', best: 'Experienced lifters who sleep well and have time to recover.', says: 'Each muscle twice a week with more total sets. Only worth it if sleep and recovery are solid.',
     make() {
       const push = n => D(`Push ${n}`, [[n === 1 ? 'Incline machine chest press' : 'Flat machine chest press', 3, 8, 12], [n === 1 ? 'Machine chest press' : 'Incline dumbbell press', 3, 8, 12], ['Machine shoulder press', 2, 8, 12], ['Cable lateral raises', 4, 12, 20], ['Rope pushdown', 3, 10, 15]]);
       const pull = n => D(`Pull ${n}`, [[n === 1 ? 'Lat pulldown' : 'Neutral-grip lat pulldown', 3, 8, 12], [n === 1 ? 'Chest-supported row' : 'Seated cable row', 3, 8, 12], ['Single-arm cable row', 2, 10, 12], ['Reverse pec deck', 3, 12, 20], ['Preacher curls', 3, 10, 12]]);
@@ -284,7 +284,7 @@ const PROGRAMS = [
     },
   },
   {
-    key: 'fb3', name: 'Full body, 3 days', source: '3 days a week', says: 'For busy weeks or travel. Every muscle three times a week in fewer sessions.',
+    key: 'fb3', name: 'Full body, 3 days', source: '3 days a week', plain: 'Every session trains your whole body, so you need the fewest days in the gym.', best: 'Beginners, busy weeks and travel.', says: 'For busy weeks or travel. Every muscle three times a week in fewer sessions.',
     make() {
       const a = D('Full body A', [['Machine chest press', 3, 8, 12], ['Lat pulldown', 3, 8, 12], ['Leg press', 3, 8, 12], ['Cable lateral raises', 3, 12, 20], ['Seated leg curl', 2, 10, 15], ['Rope pushdown', 2, 10, 15]]);
       const b = D('Full body B', [['Incline dumbbell press', 3, 8, 12], ['Chest-supported row', 3, 8, 12], ['Hack squat', 3, 8, 12], ['Reverse pec deck', 3, 12, 20], ['Dumbbell curls', 2, 10, 15], ['Cable crunches', 3, 12, 15]]);

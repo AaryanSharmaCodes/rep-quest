@@ -57,7 +57,7 @@ function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(writeS
 function flushSave() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; writeSave(); } }
 
 /* ---------- State ---------- */
-const APP_VERSION = 8; // matches CACHE in sw.js
+const APP_VERSION = 9; // matches CACHE in sw.js
 const THEMES = [
   { id: 'game', name: 'Quest', bar: '#170e33', fx: ['#b78eff', '#dfceff', '#ffffff', '#7f5cff'], shapes: ['star', 'circle'], burst: 1 },
   { id: 'light', name: 'Minimal', bar: '#f7f7f4', fx: ['#17171a', '#8a8a8e', '#c9c9c5'], shapes: ['circle'], burst: 0.6 },
@@ -152,6 +152,7 @@ function migrate(saved) {
 
 const isInstalled = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 const guideSeen = () => { try { return localStorage.getItem('rq-guide-seen') === '1'; } catch (e) { return true; } };
+const CALC_MS = 1800; // the short "calculating" pause before someone's targets appear
 const freshSetup = () => ({ step: 0, name: '', weight: '', height: '', age: '', sex: '', goal: 'recomp', activity: 'moderate', plan: 'final', kcal: '', protein: '', carbs: '', fat: '' });
 let state = defaultState();
 const ui = {

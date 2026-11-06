@@ -546,10 +546,10 @@ html[data-theme=arcade] .splash-q { font-size: 23px; line-height: 1.5; }
 /* ---------- First-time setup ---------- */
 .setup { display: flex; flex-direction: column; gap: 10px; min-height: 86dvh; }
 .setup > p { color: var(--dim); }
-.setup-steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 14px; }
+.setup-steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 14px; }
 .setup-steps i { height: 4px; background: var(--track); transition: background-color .3s ease; }
 .setup-steps i.on { background: var(--accent); }
-.setup-foot { position: sticky; bottom: calc(env(safe-area-inset-bottom) + 12px); display: flex; gap: 10px; margin-top: auto; padding-top: 16px; }
+.setup-foot { position: sticky; z-index: 5; bottom: calc(env(safe-area-inset-bottom) + 12px); display: flex; gap: 10px; margin-top: auto; padding-top: 16px; }
 .setup-foot .btn { flex: 1; }
 .setup-foot .btn.solid { flex: 2; }
 .field-label { font-size: 13px; color: var(--dim); }
@@ -563,6 +563,14 @@ html[data-theme=arcade] .splash-q { font-size: 23px; line-height: 1.5; }
 .plan-card b { font-weight: 600; font-size: 16px; }
 .plan-card em { float: right; font-style: normal; color: var(--dim); font-size: 13px; }
 .plan-card span { display: block; margin-top: 3px; color: var(--dim); font-size: 13.5px; }
+.plan-card small { display: block; margin-top: 6px; color: var(--accent-hi); font-size: 12.5px; }
+.targets-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.targets-head .link { padding: 4px 0 4px 12px; font-size: 14px; }
+.form.locked input { color: var(--dim); background: transparent; border-style: dashed; pointer-events: none; }
+.setup-calc { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; min-height: 78dvh; text-align: center; }
+.setup-calc p { color: var(--dim); }
+.calc-ring { width: 56px; height: 56px; border: 3px solid var(--track); border-top-color: var(--accent); border-radius: 50%; animation: calc-spin .9s linear infinite; }
+@keyframes calc-spin { to { transform: rotate(360deg); } }
 .welcome .btn { width: 100%; }
 
 /* ---------- Motion ---------- */

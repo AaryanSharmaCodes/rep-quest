@@ -1,4 +1,4 @@
-# Rep Quest
+# Repsolute
 
 My workout, weight and calorie tracker. Each day has four quests: train, hit protein, hit calories and weigh in. Clearing them earns XP.
 
