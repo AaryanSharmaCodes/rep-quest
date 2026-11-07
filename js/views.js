@@ -196,13 +196,6 @@ function weekStrip(sel) {
     ${later ? `<button class="wk-arrow" data-a="dayWeek" data-by="7" aria-label="Next week">${i('next')}</button>` : '<span class="wk-arrow"></span>'}
   </nav>`;
 }
-function dayLogRow(k) {
-  const d = peekDay(k);
-  const bits = [d.sleep != null ? `${d.sleep} h sleep` : '', d.water != null ? `${d.water} L water` : '', d.cardio ? `${d.cardio} min cardio` : '', d.waist != null ? `${d.waist} cm waist` : ''].filter(Boolean);
-  const blank = !bits.length && !d.note;
-  return `<section class="block"><h2>Sleep, water and notes</h2>
-    <button class="row day-log" data-a="openSheet" data-type="log" data-date="${k}"><span>${blank ? 'Nothing logged' : esc(bits.join(', ')) || 'Note'}${d.note ? `<em>${esc(d.note)}</em>` : ''}</span><span class="dim">${blank ? 'Add' : 'Edit'}</span></button></section>`;
-}
 function viewToday() {
   const k = ui.day && ui.day !== today() ? ui.day : today();
   if (k > today()) return viewFutureDay(k);
@@ -227,8 +220,7 @@ function viewToday() {
     <div class="q-head"><h2>Daily Quests</h2><span class="q-count">[${cleared.length} / ${quests.length}]</span></div>
     ${open.length ? `<ul class="quests">${open.map(q => questCard(q, info[q.id], fresh)).join('')}</ul>` : '<p class="all-clear">All quests cleared today.</p>'}
   </section>
-  ${cleared.length ? `<section class="block"><h2>Completed</h2><ul class="quests">${cleared.map(q => questCard(q, info[q.id], fresh)).join('')}</ul></section>` : ''}
-  ${dayLogRow(k)}`;
+  ${cleared.length ? `<section class="block"><h2>Completed</h2><ul class="quests">${cleared.map(q => questCard(q, info[q.id], fresh)).join('')}</ul></section>` : ''}`;
 }
 const dayTop = (k, note = '') => `<header class="top"><div><h1>${parseKey(k).toLocaleDateString('en-IN', { weekday: 'long' })}</h1><p class="dim">${shortDate(k)}${note ? `, ${note}` : ''}</p></div><button class="btn line small" data-a="dayOpen" data-k="${today()}">Back to today</button></header>`;
 // A day that has already happened: everything logged on it, and all of it can still be changed.
@@ -253,8 +245,7 @@ function viewPastDay(k) {
   </section>
   <section class="block"><div class="q-head"><h2>Food</h2><button class="link strong" data-a="dayFood" data-k="${k}">${t.items ? 'Edit food' : 'Add food'}</button></div>
     ${food || '<p class="empty">No food logged on this day.</p>'}</section>
-  ${workouts.length ? `<section class="block"><h2>Workout</h2><div class="day-workouts">${train}</div></section>` : ''}
-  ${dayLogRow(k)}`;
+  ${workouts.length ? `<section class="block"><h2>Workout</h2><div class="day-workouts">${train}</div></section>` : ''}`;
 }
 // A day still to come: what's planned, nothing to tick off yet.
 function viewFutureDay(k) {

@@ -35,7 +35,7 @@ const SHEETS = {
   },
   log(s) {
     const date = s.date || today(), d = peekDay(date);
-    return `${sheetHead('Sleep, water and notes')}
+    return `${sheetHead('Daily log')}
       <div class="datebar slim"><button class="ic-btn" data-a="logDay" data-n="-1" aria-label="Previous day">${i('back')}</button><b>${niceDate(date)}</b>${date < today() ? `<button class="ic-btn" data-a="logDay" data-n="1" aria-label="Next day">${i('next')}</button>` : '<span class="ic-btn"></span>'}</div>
       <div class="form">
         <div class="two">${field(`Sleep, h`, 'l-sleep', d.sleep, 'inputmode="decimal"')}${field('Water, L', 'l-water', d.water, 'inputmode="decimal"')}</div>
