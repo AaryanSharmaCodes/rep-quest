@@ -35,7 +35,7 @@ const SHEETS = {
   },
   log(s) {
     const date = s.date || today(), d = peekDay(date);
-    return `${sheetHead(`Log for ${niceDate(date)}`)}
+    return `${sheetHead('Sleep, water and notes')}
       <div class="datebar slim"><button class="ic-btn" data-a="logDay" data-n="-1" aria-label="Previous day">${i('back')}</button><b>${niceDate(date)}</b>${date < today() ? `<button class="ic-btn" data-a="logDay" data-n="1" aria-label="Next day">${i('next')}</button>` : '<span class="ic-btn"></span>'}</div>
       <div class="form">
         <div class="two">${field(`Sleep, h`, 'l-sleep', d.sleep, 'inputmode="decimal"')}${field('Water, L', 'l-water', d.water, 'inputmode="decimal"')}</div>
@@ -111,10 +111,11 @@ const SHEETS = {
     if (!w) return '';
     const sets = sum(w.exercises.map(e => e.sets.filter(isWorking).length));
     const vol = sum(w.exercises.flatMap(e => e.sets.filter(isWorking).map(x => (x.w || 0) * (x.r || 0))));
+    // Hours-long "workouts" are ones left open or logged later, where the clock means nothing.
     const mins = Math.round((w.finishedAt - w.startedAt) / 60000);
     return `${sheetHead('Workout done')}
       <p class="done-num"><b data-count="${Math.round(vol)}" data-k="sum-kg">${fmt(vol)}</b> kg lifted</p>
-      <dl class="tally"><div><dd>${sets}</dd><dt>Sets</dt></div><div><dd>${mins}</dd><dt>Minutes</dt></div><div><dd>${(w.prs || []).length}</dd><dt>New bests</dt></div></dl>
+      <dl class="tally"><div><dd>${sets}</dd><dt>Sets</dt></div><div><dd>${mins > 360 ? '–' : mins}</dd><dt>Minutes</dt></div><div><dd>${(w.prs || []).length}</dd><dt>New bests</dt></div></dl>
       ${(w.prs || []).length ? `<ul class="prs">${w.prs.map(p => `<li><i class="chip" style="background:var(--carbs)"></i><span>${esc(p.name)}</span><b>${esc(setText(p, p.unit))}</b></li>`).join('')}</ul>` : '<p class="dim">No new bests today, and that still counts. Next session\'s targets are ready.</p>'}
       <button class="btn line wide" data-a="logWalk">Log a 20-minute incline walk</button>
       <button class="btn solid wide" data-a="closeAll">Done</button>`;
@@ -122,9 +123,11 @@ const SHEETS = {
   workout(s) {
     const w = state.workouts.find(x => x.id === s.id);
     if (!w) return sheetHead('Removed');
-    return `${sheetHead(w.name, niceDate(w.date))}
+    const setCount = sum(w.exercises.map(e => e.sets.filter(isWorking).length));
+    const tagFor = sets => { let n = 0; return sets.map(x => (x.type === 'warmup' ? 'W' : x.type === 'drop' ? 'D' : ++n)); };
+    return `${sheetHead(w.name, `${niceDate(w.date)}, ${setCount} sets. Tap a number to correct it`)}
       ${w.exercises.map((e, ei) => `<div class="hist-ex"><h3>${esc(e.name)}</h3>
-        <table class="sets compact"><tbody>${e.sets.map((x, si) => `<tr><td class="dim">${x.type === 'warmup' ? 'W' : si + 1}</td><td><input inputmode="decimal" value="${x.w ?? 0}" data-f="histSet" data-e="${ei}" data-j="${si}" data-k="w" aria-label="Weight"></td><td class="dim">kg</td><td><input inputmode="numeric" value="${x.r ?? 0}" data-f="histSet" data-e="${ei}" data-j="${si}" data-k="r" aria-label="Reps"></td><td class="dim">${e.unit === 'sec' ? 's' : 'reps'}</td></tr>`).join('')}</tbody></table></div>`).join('')}
+        <table class="sets compact"><tbody>${e.sets.map((x, si) => `<tr><td class="dim">${tagFor(e.sets)[si]}</td><td><input inputmode="decimal" value="${x.w ?? 0}" data-f="histSet" data-e="${ei}" data-j="${si}" data-k="w" aria-label="Weight"></td><td class="dim">kg</td><td><input inputmode="numeric" value="${x.r ?? 0}" data-f="histSet" data-e="${ei}" data-j="${si}" data-k="r" aria-label="Reps"></td><td class="dim">${e.unit === 'sec' ? 's' : 'reps'}</td></tr>`).join('')}</tbody></table></div>`).join('')}
       <button class="link danger block-link" data-a="deleteWorkout">Delete this workout</button>`;
   },
   exercise(s) {
@@ -184,12 +187,15 @@ const SHEETS = {
     hist.forEach(h => { byDate[h.date] = Math.max(byDate[h.date] || 0, bestScore(h.sets)); });
     const pts = Object.keys(byDate).sort().map(date => ({ date, v: byDate[date] }));
     const best = hist.flatMap(h => h.sets.filter(isWorking)).sort((a, b) => setScore(b) - setScore(a))[0];
+    const weighted = hist.some(h => h.sets.some(x => x.w > 0));
+    const chartUnit = weighted ? 'kg' : lib?.unit === 'sec' ? 's' : 'reps';
     return `${sheetHead(name, MUSCLE_NAMES[lib?.p] || '')}
       ${lib?.cue ? `<p>${esc(lib.cue)}</p>` : ''}
       <div id="howto" data-name="${esc(name)}"></div>
       ${best ? `<p class="dim">Best set: ${esc(setText(best, lib?.unit))}</p>` : ''}
-      ${pts.length ? lineChart({ id: 'liftSheet', points: pts, unit: 'kg', height: 150 }) : '<p class="empty">No sets logged yet.</p>'}
-      ${hist.length ? `<h3 class="sh-sub">Recent sessions</h3><ul class="rows">${hist.slice(0, 8).map(h => `<li><div class="row"><span>${niceDate(h.date)}</span><span class="dim">${h.sets.filter(isWorking).map(x => (x.w ? `${round(x.w, 2)}×${x.r}` : x.r)).join(', ')}</span></div></li>`).join('')}</ul>` : ''}`;
+      ${pts.length ? lineChart({ id: 'liftSheet', points: pts, unit: chartUnit, height: 150, minDays: 13, to: today() }) : '<p class="empty">No sets logged yet.</p>'}
+      ${pts.length && weighted ? '<p class="dim sm">Your estimated one-rep max each session, worked out from your best set. Treat it as a trend, not a true max.</p>' : ''}
+      ${hist.length ? `<h3 class="sh-sub">Recent sessions</h3><ul class="rows">${hist.slice(0, 8).map(h => `<li><div class="row"><span>${niceDate(h.date)}</span><span class="dim">${h.sets.filter(isWorking).map(x => (x.w ? `${round(x.w, 2)}×${x.r}` : `${x.r}${lib?.unit === 'sec' ? ' s' : ''}`)).join(', ')}</span></div></li>`).join('')}</ul>` : ''}`;
   },
   programs() {
     return `${sheetHead('Programs', 'Switching keeps your history. Your edits are kept if you switch back')}
@@ -226,6 +232,13 @@ const SHEETS = {
       <button class="link danger block-link" data-a="deleteDay">Delete this workout</button>`;
   },
 
+  pastWorkout(s) {
+    const planned = plannedDay(s.date);
+    const days = planned ? [planned, ...state.program.days.filter(d => d.id !== planned.id)] : state.program.days;
+    return `${sheetHead('Log a workout', `For ${niceDate(s.date)}`)}
+      <div class="plan-cards">${days.map(d => `<button class="plan-card" data-a="logPast" data-k="${s.date}" data-id="${d.id}"><b>${esc(d.name)}</b><span>${d.exercises.length} exercises${d === planned ? ', planned for this day' : ''}</span></button>`).join('')}
+      <button class="plan-card" data-a="logPast" data-k="${s.date}"><b>Empty workout</b><span>Add the exercises yourself.</span></button></div>`;
+  },
   installGuide(s) {
     const os = s.os || (/android/i.test(navigator.userAgent) ? 'android' : 'iphone');
     return `${sheetHead('Add to Home Screen', 'Full screen, offline, like any other app')}
@@ -284,10 +297,13 @@ const SHEETS = {
   goal(s) {
     const mode = s.mode || state.goal.mode;
     const g = mode === state.goal.mode ? state.goal : GOALS[mode];
-    return `${sheetHead('Goal', 'Set by how fast weight should move, with no goal weight needed')}
-      <div class="choice col">${Object.entries(GOALS).map(([k, x]) => `<button class="${mode === k ? 'on' : ''}" data-a="goalMode" data-v="${k}"><b>${esc(x.label)}</b>${k !== 'custom' ? `<span>${signed(x.lo, 2)} to ${signed(x.hi, 2)}% a week</span>` : ''}</button>`).join('')}</div>
-      <p class="sm dim">${esc(GOALS[mode].says)} ${refLinks(GOALS[mode].refs)}</p>
-      <div class="form"><div class="two">${field('Weekly change from, %', 'g-lo', g.lo, 'inputmode="text"')}${field('Weekly change to, %', 'g-hi', g.hi, 'inputmode="text"')}</div>
+    const w = latestWeight();
+    const next = suggestTargets(state.profile, w, g);
+    const offer = next && mode !== state.goal.mode && next.kcal !== state.targets.kcal;
+    return `${sheetHead('Your goal', 'You can change this any time')}
+      <div class="plan-cards">${Object.entries(GOALS).map(([k, x]) => `<button class="plan-card${mode === k ? ' on' : ''}" data-a="goalMode" data-v="${k}"><b>${esc(x.label)}</b><span>${esc(x.plain || x.says)}</span>${k !== 'custom' && w ? `<small>${esc(goalPace(x, w))}</small>` : ''}</button>`).join('')}</div>
+      ${mode === 'custom' ? `<div class="form"><p class="sm dim">How fast your weight should change each week, as a percentage of your body weight. Use a minus to lose weight.</p><div class="two">${field('From, %', 'g-lo', g.lo, 'inputmode="text"')}${field('To, %', 'g-hi', g.hi, 'inputmode="text"')}</div></div>` : ''}
+      <div class="form sheet-foot">${offer ? `<label class="row-check"><input type="checkbox" class="sw" id="g-apply" checked><span>Change my daily target to ${fmt(next.kcal)} kcal and ${next.protein} g protein</span></label>` : ''}
       <button class="btn solid wide" data-a="saveGoal" data-mode="${mode}">Save goal</button></div>`;
   },
   method() {

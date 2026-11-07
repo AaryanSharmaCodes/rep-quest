@@ -3,41 +3,47 @@
 // Page gutters are 16 px and most charts sit inside a panel with 14 px of padding.
 const chartWidth = () => clamp((document.documentElement.clientWidth || window.innerWidth || 375) - 60, 240, 620);
 
-function niceTicks(lo, hi, count = 3) {
-  const span = hi - lo || 1;
-  const raw = span / (count - 1 || 1);
+// A vertical scale that starts and ends on round numbers, so every gridline has a label and nothing floats off the top.
+function niceScale(lo, hi, minSpan = 0, count = 4) {
+  if (hi - lo < minSpan) { const mid = (lo + hi) / 2; lo = mid - minSpan / 2; hi = mid + minSpan / 2; }
+  if (hi === lo) { lo -= 1; hi += 1; }
+  const raw = (hi - lo) / (count - 1);
   const mag = 10 ** Math.floor(Math.log10(raw));
-  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= raw) || raw;
-  const start = Math.floor(lo / step) * step;
-  const out = [];
-  for (let v = start; v <= hi + step * 0.001; v += step) out.push(round(v, 3));
-  return out;
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= raw - 1e-9) || raw;
+  const bottom = Math.floor(lo / step + 1e-9) * step, top = Math.ceil(hi / step - 1e-9) * step;
+  const ticks = [];
+  for (let n = 0; bottom + n * step <= top + step * 0.001; n++) ticks.push(round(bottom + n * step, 3));
+  return { lo: bottom, hi: top, ticks };
 }
 const smoothPath = pts => pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join('');
+const chartDate = k => (k === today() ? 'Today' : shortDate(k));
 
-// Line chart with optional raw dots behind a smoothed line. Touch and drag to read any day.
-function lineChart({ id, points, height = 190, unit = '', decimals = 1, showRaw = false, lineKey = 'v', dashed = null, emptyText = 'Nothing logged yet.' }) {
+// A line over real time: `to` is the right edge and the axis always covers at least `minDays`, so two readings
+// sit a day apart instead of stretching across the whole chart. Touch and drag to read any day.
+function lineChart({ id, points, height = 190, unit = '', decimals = 1, showRaw = false, lineKey = 'v', minSpan = 0, minDays = 0, from = null, to = null, emptyText = 'Nothing logged yet.' }) {
   if (!points.length) return `<p class="empty">${esc(emptyText)}</p>`;
-  const W = chartWidth(), H = height, padR = 34, padT = 10, padB = 22, padL = 2;
+  const W = chartWidth(), H = height, padR = 38, padT = 10, padB = 22, padL = 2;
   const vals = points.flatMap(p => [p.v, p[lineKey]]).filter(v => v != null);
-  if (dashed != null) vals.push(dashed);
-  let lo = Math.min(...vals), hi = Math.max(...vals);
-  const pad = Math.max((hi - lo) * 0.14, lo * 0.0025, 0.2);
-  lo -= pad; hi += pad;
-  const ticks = niceTicks(lo, hi, 3);
-  const first = points[0].date, span = Math.max(daysBetween(first, points[points.length - 1].date), 1);
+  const { lo, hi, ticks } = niceScale(Math.min(...vals), Math.max(...vals), minSpan);
+  const last = to || points[points.length - 1].date;
+  let first = from && from < points[0].date ? from : points[0].date;
+  if (minDays && daysBetween(first, last) < minDays) first = addDays(last, -minDays);
+  const span = Math.max(daysBetween(first, last), 1);
   const x = date => padL + (daysBetween(first, date) / span) * (W - padL - padR);
   const y = v => padT + (1 - (v - lo) / (hi - lo)) * (H - padT - padB);
-  const grid = ticks.filter(t => t >= lo && t <= hi).map(t => `<line x1="${padL}" x2="${W - padR}" y1="${y(t)}" y2="${y(t)}" class="c-grid"/><text x="${W - padR + 6}" y="${y(t) + 4}" class="c-axis">${t}</text>`).join('');
-  const line = smoothPath(points.map(p => [x(p.date), y(p[lineKey])]));
-  const raw = showRaw ? points.map(p => `<circle cx="${x(p.date).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="2.2" class="c-dot"/>`).join('') : '';
-  const single = points.length === 1 ? `<circle cx="${x(points[0].date)}" cy="${y(points[0].v)}" r="4" class="c-dot-on"/>` : '';
-  const target = dashed != null ? `<line x1="${padL}" x2="${W - padR}" y1="${y(dashed)}" y2="${y(dashed)}" class="c-target"/>` : '';
-  const labels = [points[0].date, points[points.length - 1].date];
-  const xl = labels.map((d, i) => `<text x="${i ? W - padR : padL}" y="${H - 5}" class="c-axis" text-anchor="${i ? 'end' : 'start'}">${shortDate(d)}</text>`).join('');
+  const grid = ticks.map(t => `<line x1="${padL}" x2="${W - padR}" y1="${y(t)}" y2="${y(t)}" class="c-grid"/><text x="${W - padR + 6}" y="${y(t) + 4}" class="c-axis">${t}</text>`).join('');
+  const line = points.length > 1 ? `<path d="${smoothPath(points.map(p => [x(p.date), y(p[lineKey])]))}" class="c-line" pathLength="1"/>` : '';
+  // Dots shrink as readings pile up. The newest is always the clear one, so you can see where you are now.
+  const r = points.length > 60 ? 1.5 : points.length > 21 ? 2.2 : 3;
+  const raw = showRaw ? points.slice(0, -1).map(p => `<circle cx="${x(p.date).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="${r}" class="c-dot"/>`).join('') : '';
+  const end = points[points.length - 1];
+  const now = showRaw || points.length === 1 ? `<circle cx="${x(end.date).toFixed(1)}" cy="${y(end.v).toFixed(1)}" r="5" class="c-dot-on"/>` : '';
+  const mid = addDays(first, Math.round(span / 2));
+  const xl = [[first, padL, 'start'], ...(span >= 4 ? [[mid, (padL + W - padR) / 2, 'middle']] : []), [last, W - padR, 'end']]
+    .map(([d, px, anchor]) => `<text x="${px}" y="${H - 5}" class="c-axis" text-anchor="${anchor}">${chartDate(d)}</text>`).join('');
   ui.charts[id] = { points, W, padL, padR, lineKey, unit, decimals, xy: points.map(p => [x(p.date), y(p[lineKey])]), H, padT, padB, first, span };
   return `<div class="chart" data-chart="${id}" style="height:${H}px">
-    <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(id)} chart with ${points.length} readings">${grid}${target}${raw}<path d="${line}" class="c-line" pathLength="1"/>${single}${xl}<g class="c-cursor" hidden><line class="c-cross" y1="${padT}" y2="${H - padB}"/><circle r="5" class="c-dot-on"/></g></svg>
+    <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(id)} chart with ${points.length} readings">${grid}${line}${raw}${now}${xl}<g class="c-cursor" hidden><line class="c-cross" y1="${padT}" y2="${H - padB}"/><circle r="5" class="c-dot-on"/></g></svg>
     <div class="c-tip" hidden></div></div>`;
 }
 function moveCursor(el, clientX) {
@@ -55,9 +61,10 @@ function moveCursor(el, clientX) {
   g.querySelector('circle').setAttribute('cx', cx);
   g.querySelector('circle').setAttribute('cy', cy);
   tip.hidden = false;
-  const main = round(p[c.lineKey], c.decimals);
-  const rawNote = c.lineKey !== 'v' && p.v != null ? `<span>scale ${round(p.v, 1)}</span>` : '';
-  tip.innerHTML = `<b>${main}${c.unit ? ' ' + c.unit : ''}</b>${rawNote}<span>${shortDate(p.date)}</span>`;
+  // The scale reading is the number people remember, so it leads. The trend sits beside it.
+  const main = round(p.v, c.decimals);
+  const trendNote = c.lineKey !== 'v' && p[c.lineKey] != null ? `<span>trend ${round(p[c.lineKey], 1)}</span>` : '';
+  tip.innerHTML = `<b>${main}${c.unit ? ' ' + c.unit : ''}</b>${trendNote}<span>${chartDate(p.date)}</span>`;
   const tw = tip.offsetWidth;
   tip.style.left = `${clamp(cx - tw / 2, 0, c.W - tw)}px`;
 }
@@ -87,16 +94,17 @@ function barChart({ id, days, get, target, color = 'var(--accent)', height = 120
 }
 function moveBarCursor(el, clientX) {
   const c = ui.charts[el.dataset.chart];
+  if (!c) return;
   const box = el.getBoundingClientRect();
   const i = clamp(Math.floor((clientX - box.left) / (c.bw + c.gap)), 0, c.days.length - 1);
   const tip = el.querySelector('.c-tip');
   tip.hidden = false;
-  tip.innerHTML = `<b>${c.vals[i] ? fmt(c.vals[i]) + (c.unit ? ' ' + c.unit : '') : 'Not logged'}</b><span>${shortDate(c.days[i])}</span>`;
+  tip.innerHTML = `<b>${c.vals[i] ? fmt(c.vals[i]) + (c.unit ? ' ' + c.unit : '') : 'Not logged'}</b><span>${chartDate(c.days[i])}</span>`;
   tip.style.left = `${clamp(i * (c.bw + c.gap) - tip.offsetWidth / 2, 0, c.W - tip.offsetWidth)}px`;
 }
 
-// 18 weeks of training days, like a contribution graph. Red is trained, grey is any other logged day.
-function heatmap(weeks = 18) {
+// Recent weeks, Monday at the top. Tap any square to open that day.
+function heatmap(weeks = 14) {
   const end = today(), start = addDays(weekStart(end), -7 * (weeks - 1));
   let cells = '';
   for (let i = 0; i < weeks * 7; i++) {
@@ -105,7 +113,8 @@ function heatmap(weeks = 18) {
     const trained = workoutsOn(k).length > 0;
     const logged = trained || peekDay(k).weight != null || dayTotals(k).items > 0;
     const full = questsFor(k).every(q => q.done) && logged;
-    cells += `<i class="${full ? 'h-full' : trained ? 'h-train' : logged ? 'h-log' : ''}" title="${shortDate(k)}"></i>`;
+    const kind = full ? 'h-full' : trained ? 'h-train' : logged ? 'h-log' : '';
+    cells += `<button class="${kind}" data-a="dayOpen" data-k="${k}" aria-label="${niceDate(k)}"></button>`;
   }
   return `<div class="heat" style="--w:${weeks}">${cells}</div>`;
 }

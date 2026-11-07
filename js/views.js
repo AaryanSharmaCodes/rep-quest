@@ -139,65 +139,131 @@ function questCard(q, info, fresh) {
     ${pct != null && !q.done ? `<i class="q-fill" data-k="q-${q.id}" data-pct="${pct * 100}" style="width:${pct * 100}%"></i>` : ''}
   </button></li>`;
 }
+// What each quest says for a day. Today speaks in the present; past days just say what happened.
+function questInfo(k) {
+  const d = peekDay(k), t = dayTotals(k), tg = targetsOn(k), isNow = k === today();
+  const plan = plannedDay(k), trained = workoutsOn(k), a = isNow ? state.active : null;
+  const setsDone = a ? sum(a.exercises.map(e => e.sets.filter(x => x.done && isWorking(x)).length)) : 0;
+  const setsAll = a ? sum(a.exercises.map(e => e.sets.filter(isWorking).length)) : 0;
+  const trainedSets = sum(trained.flatMap(w => w.exercises.map(e => e.sets.filter(isWorking).length)));
+  const kcalLeft = tg.kcal - t.kcal, proteinLeft = Math.max(0, tg.protein - t.p);
+  const foodOpen = isNow ? 'data-a="go" data-tab="food"' : `data-a="dayFood" data-k="${k}"`;
+  const trainOpen = isNow ? 'data-a="go" data-tab="train"'
+    : trained.length ? `data-a="openSheet" data-type="workout" data-id="${trained[trained.length - 1].id}"`
+    : `data-a="openSheet" data-type="pastWorkout" data-date="${k}"`;
+  return {
+    train: {
+      label: plan || trained.length ? 'Train' : 'Recover',
+      value: a ? 'In progress' : trained.length ? esc(trained[0].name) : plan ? esc(plan.name) : 'Rest day',
+      sub: a ? `${setsDone} of ${setsAll} sets` : trained.length ? `Workout finished, ${trainedSets} sets`
+        : !isNow ? (plan ? 'No workout logged. Tap to add one' : 'Rest day. Tap to add a workout')
+        : plan ? `${plan.exercises.length} exercises, ${sum(plan.exercises.map(e => e.sets))} sets` : 'Eat normally, recover',
+      pct: a && setsAll ? setsDone / setsAll : null,
+      open: trainOpen,
+    },
+    protein: {
+      label: 'Protein', value: `${Math.round(t.p)} / ${tg.protein} g`,
+      sub: proteinLeft <= 5 && tg.protein > 0 ? 'Target reached' : isNow ? `${Math.round(proteinLeft)} g left` : t.items ? `${Math.round(proteinLeft)} g short` : 'Nothing logged',
+      pct: tg.protein > 0 ? t.p / tg.protein : null, open: foodOpen,
+    },
+    calories: {
+      label: 'Calories', value: `${fmt(t.kcal)} / ${fmt(tg.kcal)}`,
+      sub: !isNow && !t.items ? 'Nothing logged' : !isNow && Math.abs(kcalLeft) <= 150 ? 'On target' : kcalLeft < 0 ? `${fmt(-kcalLeft)} kcal over` : isNow ? `${fmt(kcalLeft)} kcal left` : `${fmt(kcalLeft)} kcal under`,
+      pct: tg.kcal > 0 ? t.kcal / tg.kcal : null, open: foodOpen,
+    },
+    weigh: {
+      label: 'Weigh in', value: d.weight != null ? `${d.weight} kg` : isNow ? 'Not yet' : 'Not logged',
+      sub: d.weight != null ? (isNow ? 'Logged today' : 'Tap to change') : isNow ? 'First thing in the morning' : 'Tap to add',
+      pct: null, open: `data-a="openSheet" data-type="weight" data-date="${k}"`,
+    },
+  };
+}
+// The week across the top of Today. Each day opens its own page, and the arrows reach older weeks.
+function weekStrip(sel) {
+  const now = today(), start = weekStart(sel);
+  const cells = WEEK_ORDER.map((wd, n) => {
+    const day = addDays(start, n), future = day > now;
+    const count = future ? 0 : questsFor(day).filter(q => q.done).length;
+    const hasLog = !future && (peekDay(day).weight != null || dayTotals(day).items > 0 || workoutsOn(day).length > 0 || day === now);
+    const shown = hasLog ? count : 0;
+    const name = parseKey(day).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
+    return `<button class="wk${day === now ? ' now' : ''}${day === sel ? ' on' : ''}${shown === QUESTS.length ? ' all' : ''}" data-a="dayOpen" data-k="${day}" aria-label="${name}${future ? '' : `, ${shown} of ${QUESTS.length} quests`}"${day === sel ? ' aria-current="date"' : ''}><i style="--p:${shown / QUESTS.length}"></i><span>${DAY_SHORT[wd][0]}</span><small>${parseKey(day).getDate()}</small></button>`;
+  }).join('');
+  const later = start < weekStart(now);
+  return `<nav class="week-nav" aria-label="Choose a day">
+    <button class="wk-arrow" data-a="dayWeek" data-by="-7" aria-label="Previous week">${i('back')}</button>
+    <div class="week">${cells}</div>
+    ${later ? `<button class="wk-arrow" data-a="dayWeek" data-by="7" aria-label="Next week">${i('next')}</button>` : '<span class="wk-arrow"></span>'}
+  </nav>`;
+}
+function dayLogRow(k) {
+  const d = peekDay(k);
+  const bits = [d.sleep != null ? `${d.sleep} h sleep` : '', d.water != null ? `${d.water} L water` : '', d.cardio ? `${d.cardio} min cardio` : '', d.waist != null ? `${d.waist} cm waist` : ''].filter(Boolean);
+  const blank = !bits.length && !d.note;
+  return `<section class="block"><h2>Sleep, water and notes</h2>
+    <button class="row day-log" data-a="openSheet" data-type="log" data-date="${k}"><span>${blank ? 'Nothing logged' : esc(bits.join(', ')) || 'Note'}${d.note ? `<em>${esc(d.note)}</em>` : ''}</span><span class="dim">${blank ? 'Add' : 'Edit'}</span></button></section>`;
+}
 function viewToday() {
-  const k = today(), quests = questsFor(k), cleared = quests.filter(q => q.done), open = quests.filter(q => !q.done);
+  const k = ui.day && ui.day !== today() ? ui.day : today();
+  if (k > today()) return viewFutureDay(k);
+  if (k < today()) return viewPastDay(k);
+  const quests = questsFor(k), cleared = quests.filter(q => q.done), open = quests.filter(q => !q.done);
   const prev = ui.lastCleared[k];
   const fresh = prev ? cleared.filter(q => !prev.includes(q.id)).map(q => q.id) : [];
   ui.lastCleared[k] = cleared.map(q => q.id);
   if (fresh.length) { setTimeout(playClang, 120); Motion.after(() => Motion.questCleared(open.length === 0)); }
   const s = computeStats();
   Motion.after(() => Motion.checkLevel(s.level));
-  const d = peekDay(k), t = dayTotals(k), tg = state.targets;
-  const plan = plannedDay(k), trained = workoutsOn(k), a = state.active;
-  const date = parseKey(k);
-  const setsDone = a ? sum(a.exercises.map(e => e.sets.filter(x => x.done && isWorking(x)).length)) : 0;
-  const setsAll = a ? sum(a.exercises.map(e => e.sets.filter(isWorking).length)) : 0;
-  const kcalLeft = tg.kcal - t.kcal, proteinLeft = Math.max(0, tg.protein - t.p);
-  const info = {
-    train: {
-      label: plan || trained.length ? 'Train' : 'Recover',
-      value: a ? 'In progress' : trained.length ? esc(trained[0].name) : plan ? esc(plan.name) : 'Rest day',
-      sub: a ? `${setsDone} of ${setsAll} sets` : trained.length ? 'Workout finished' : plan ? `${plan.exercises.length} exercises, ${sum(plan.exercises.map(e => e.sets))} sets` : 'Eat normally, recover',
-      pct: a && setsAll ? setsDone / setsAll : null,
-      open: 'data-a="go" data-tab="train"',
-    },
-    protein: {
-      label: 'Protein', value: `${Math.round(t.p)} / ${tg.protein} g`,
-      sub: proteinLeft > 0 ? `${Math.round(proteinLeft)} g left` : 'Target reached',
-      pct: t.p / tg.protein, open: 'data-a="go" data-tab="food"',
-    },
-    calories: {
-      label: 'Calories', value: `${fmt(t.kcal)} / ${fmt(tg.kcal)}`,
-      sub: kcalLeft >= 0 ? `${fmt(kcalLeft)} kcal left` : `${fmt(-kcalLeft)} kcal over`,
-      pct: t.kcal / tg.kcal, open: 'data-a="go" data-tab="food"',
-    },
-    weigh: {
-      label: 'Weigh in', value: d.weight != null ? `${d.weight} kg` : 'Not yet',
-      sub: d.weight != null ? 'Logged today' : 'First thing in the morning',
-      pct: null, open: 'data-a="openSheet" data-type="weight"',
-    },
-  };
-  const wkStart = weekStart(k);
-  const week = WEEK_ORDER.map((wd, n) => {
-    const day = addDays(wkStart, n), future = day > k;
-    const count = future ? 0 : questsFor(day).filter(q => q.done).length;
-    const hasLog = !future && (peekDay(day).weight != null || dayTotals(day).items > 0 || workoutsOn(day).length > 0 || day === k);
-    const shown = hasLog ? count : 0;
-    return `<div class="wk${day === k ? ' now' : ''}${shown === QUESTS.length ? ' all' : ''}" aria-label="${DAY_SHORT[wd]}: ${shown} of ${QUESTS.length} quests"><i style="--p:${shown / QUESTS.length}"></i><span>${DAY_SHORT[wd][0]}</span></div>`;
-  }).join('');
+  const info = questInfo(k), date = parseKey(k);
   return `
   <header class="top">
     <div><h1>${date.toLocaleDateString('en-IN', { weekday: 'long' })}</h1><p class="dim">${shortDate(k)}${s.streak > 1 ? `, ${s.streak}-day streak` : ''}</p></div>
     <button class="level" data-a="go" data-tab="you" aria-label="Level ${s.level}"><b>${s.level}</b><span>Level</span></button>
   </header>
   <div class="xp"><div class="xp-track"><i data-k="xp" data-pct="${s.into / s.need * 100}" style="width:${s.into / s.need * 100}%"></i></div><p>${fmt(s.into)} / ${fmt(s.need)} XP</p></div>
+  ${weekStrip(k)}
   <p class="day-quote">${esc(quoteFor(k))}</p>
   <section class="block first">
     <div class="q-head"><h2>Daily Quests</h2><span class="q-count">[${cleared.length} / ${quests.length}]</span></div>
     ${open.length ? `<ul class="quests">${open.map(q => questCard(q, info[q.id], fresh)).join('')}</ul>` : '<p class="all-clear">All quests cleared today.</p>'}
   </section>
   ${cleared.length ? `<section class="block"><h2>Completed</h2><ul class="quests">${cleared.map(q => questCard(q, info[q.id], fresh)).join('')}</ul></section>` : ''}
-  <section class="block"><div class="week">${week}</div></section>`;
+  ${dayLogRow(k)}`;
+}
+const dayTop = (k, note = '') => `<header class="top"><div><h1>${parseKey(k).toLocaleDateString('en-IN', { weekday: 'long' })}</h1><p class="dim">${shortDate(k)}${note ? `, ${note}` : ''}</p></div><button class="btn line small" data-a="dayOpen" data-k="${today()}">Back to today</button></header>`;
+// A day that has already happened: everything logged on it, and all of it can still be changed.
+function viewPastDay(k) {
+  const quests = questsFor(k), info = questInfo(k), done = quests.filter(q => q.done).length;
+  const meals = peekDay(k).meals || {}, t = dayTotals(k), workouts = workoutsOn(k);
+  const filled = SLOTS.filter(([slot]) => (meals[slot] || []).length);
+  const food = filled.map(([slot, name]) => {
+    const list = meals[slot];
+    return `<div class="meal day-meal"><div class="meal-head"><h3>${name}</h3><span class="dim">${fmt(sum(list.map(e => e.kcal)))} kcal, ${Math.round(sum(list.map(e => e.p)))} g protein</span></div>
+      <ul class="rows">${list.map(e => `<li><button class="row" data-a="dayEntry" data-k="${k}" data-slot="${slot}" data-id="${e.id}"><span>${esc(e.name)}<em>${esc(e.amount || e.label || '')}</em></span><span class="dim">${fmt(e.kcal)}</span></button></li>`).join('')}</ul></div>`;
+  }).join('');
+  const train = workouts.map(w => `<button class="card day-workout" data-a="openSheet" data-type="workout" data-id="${w.id}">
+      <span class="dw-head"><b>${esc(w.name)}${w.place === 'home' ? ' at home' : ''}</b><span class="dim">Edit</span></span>
+      ${w.exercises.map(e => `<span class="dw-row"><span>${esc(e.name)}</span><span class="dim">${esc(lastTimeText(e.sets, e.unit))}</span></span>`).join('')}
+    </button>`).join('');
+  return `${dayTop(k, k === addDays(today(), -1) ? 'yesterday' : '')}
+  ${weekStrip(k)}
+  <section class="block first">
+    <div class="q-head"><h2>Quests</h2><span class="q-count">[${done} / ${quests.length}]</span></div>
+    <ul class="quests">${quests.map(q => questCard(q, info[q.id], [])).join('')}</ul>
+  </section>
+  <section class="block"><div class="q-head"><h2>Food</h2><button class="link strong" data-a="dayFood" data-k="${k}">${t.items ? 'Edit food' : 'Add food'}</button></div>
+    ${food || '<p class="empty">No food logged on this day.</p>'}</section>
+  ${workouts.length ? `<section class="block"><h2>Workout</h2><div class="day-workouts">${train}</div></section>` : ''}
+  ${dayLogRow(k)}`;
+}
+// A day still to come: what's planned, nothing to tick off yet.
+function viewFutureDay(k) {
+  const plan = plannedDay(k);
+  return `${dayTop(k, k === addDays(today(), 1) ? 'tomorrow' : '')}
+  ${weekStrip(k)}
+  <section class="block first">${plan ? `<div class="session-head"><div><h2>${esc(plan.name)}</h2><p class="dim">${plan.exercises.length} exercises, ${sum(plan.exercises.map(e => e.sets))} sets planned</p></div></div>
+    <ol class="plan-list">${plan.exercises.map(e => `<li><button data-a="openSheet" data-type="lift" data-name="${esc(e.name)}"><span class="pl-name">${esc(e.name)}</span><span class="pl-sub">${e.sets} × ${e.lo} to ${e.hi}${e.unit === 'sec' ? ' s' : ''}</span></button></li>`).join('')}</ol>`
+    : '<div class="session-head"><div><h2>Rest day</h2><p class="dim">Nothing planned. Eat normally, recover.</p></div></div>'}</section>`;
 }
 
 /* ---------- Train ---------- */
@@ -260,8 +326,8 @@ function viewPlan() {
   ${inDeload() ? `<p class="banner">Lighter week until ${shortDate(state.deloadUntil)}: half the sets, 10% less weight. <button class="link strong" data-a="endDeload">End it</button></p>` : ''}
   <div class="dstrip">${strip}</div>
   ${showDone ? doneCard(trainedToday) : `${isHome && !doneToday && day ? homeBanner(day.id) : ''}${body}`}
-  ${doneToday ? '' : `<section class="block"><h2>Train something else</h2>
-    <div class="pills">${others.map(d => `<button class="pill" data-a="openSheet" data-type="startChoice" data-id="${d.id}">${esc(d.name)}</button>`).join('')}<button class="pill" data-a="startEmpty">Empty workout</button></div></section>`}
+  ${`<section class="block"><h2>${doneToday ? 'Do another workout' : 'Train something else'}</h2>
+    <div class="pills">${(doneToday ? p.days : others).map(d => `<button class="pill" data-a="openSheet" data-type="startChoice" data-id="${d.id}">${esc(d.name)}</button>`).join('')}<button class="pill" data-a="startEmpty">Empty workout</button></div></section>`}
   <section class="block"><h2>Cardio</h2>
     <button class="row" data-a="openSheet" data-type="log"><span>Incline walk or other cardio</span><span class="dim">${peekDay(today()).cardio ? `${peekDay(today()).cardio} min today` : 'Log minutes'}</span></button></section>
   <section class="block"><h2>History</h2>
@@ -333,7 +399,7 @@ function viewFood() {
   const k = ui.foodDate, t = dayTotals(k), tg = targetsOn(k);
   const meals = peekDay(k).meals || {};
   const left = tg.kcal - t.kcal;
-  const bar = (label, got, of, color) => `<div class="mac"><div class="mac-top"><span>${label}</span><span>[${Math.round(got)}<em> / ${of} g</em>]</span></div><div class="mac-track"><i data-k="mac-${label}" data-pct="${clamp(got / of * 100, 0, 100)}" style="width:${clamp(got / of * 100, 0, 100)}%;background:${color}"></i></div></div>`;
+  const bar = (label, got, of, color) => { const pct = of > 0 ? clamp(got / of * 100, 0, 100) : 0; return `<div class="mac"><div class="mac-top"><span>${label}</span><span>[${Math.round(got)}<em> / ${of} g</em>]</span></div><div class="mac-track"><i data-k="mac-${label}" data-pct="${pct}" style="width:${pct}%;background:${color}"></i></div></div>`; };
   const yesterday = addDays(k, -1);
   const yMeals = peekDay(yesterday).meals || {};
   return `
@@ -342,9 +408,10 @@ function viewFood() {
     <h1>${niceDate(k)}</h1>
     ${k < today() ? `<button class="ic-btn" data-a="foodDay" data-n="1" aria-label="Next day">${i('next')}</button>` : '<span class="ic-btn"></span>'}
   </div></header>
+  ${k < today() ? '<p class="center food-back"><button class="link strong" data-a="foodToday">Back to today</button></p>' : ''}
   <section class="hero left">
     <p class="big-num"><b data-count="${Math.abs(Math.round(left))}" data-k="kcal-left">${fmt(Math.abs(left))}</b></p>
-    <p class="dim">${left >= 0 ? 'kcal left' : 'kcal over'} of ${fmt(tg.kcal)}</p>
+    <p class="dim">${left < 0 ? 'kcal over' : k < today() ? 'kcal under' : 'kcal left'} of ${fmt(tg.kcal)}</p>
     ${bar('Protein', t.p, tg.protein, 'var(--protein)')}${bar('Carbs', t.c, tg.carbs, 'var(--carbs)')}${bar('Fat', t.f, tg.fat, 'var(--fat)')}
   </section>
   ${SLOTS.map(([slot, name]) => {
@@ -365,84 +432,137 @@ function viewFood() {
 }
 
 /* ---------- Progress ---------- */
-function viewProgress() {
-  const range = ui.range;
-  const trended = weightTrend(series('weight', 0));
-  const shown = range ? trended.filter(p => p.date >= addDays(today(), -range)) : trended;
-  const now = shown[shown.length - 1];
-  const last7 = series('weight', 6).map(x => x.v), prev7 = Object.keys(state.days).filter(k => k >= addDays(today(), -13) && k < addDays(today(), -6) && state.days[k].weight != null).map(k => state.days[k].weight);
-  const weekChange = last7.length && prev7.length ? avg(last7) - avg(prev7) : null;
-  const ranges = [[14, '2W'], [30, '1M'], [90, '3M'], [365, '1Y'], [0, 'All']];
-  const c = coachNow();
-
-  const days14 = Array.from({ length: 21 }, (_, n) => addDays(today(), n - 20));
-  const vol = weeklyVolume(state.workouts, weekStart(today()), muscleInfo);
-  const goal = state.muscleGoal;
-  const liftNames = [...new Set(state.workouts.flatMap(w => w.exercises.map(e => e.name)))];
-  const lift = ui.liftChart && liftNames.includes(ui.liftChart) ? ui.liftChart : liftNames[liftNames.length - 1] || null;
-  const liftPts = lift ? exerciseHistory(state.workouts, lift, 40).reverse().map(h => ({ date: h.date, v: bestScore(h.sets) })) : [];
-  // Two sets of a lift on one date would break the time axis, so keep the best.
-  const liftByDate = {};
-  liftPts.forEach(p => { liftByDate[p.date] = Math.max(liftByDate[p.date] || 0, p.v); });
-  const liftSeries = Object.entries(liftByDate).map(([date, v]) => ({ date, v }));
-  const waist = series('waist', 0);
-  // Weighing in is a daily quest and the coach has its own panel, so neither repeats here.
-  const tips = adviceList().filter(x => !['weigh', 'coach', 'review'].includes(x.id)).slice(0, 4);
-
-  return `
-  <header class="top"><div><h1>Progress</h1></div><button class="btn line small" data-a="openSheet" data-type="weight">Log weight</button></header>
-  <section class="hero left">
-    <p class="big-num">${now ? `<b>${round(now.t, 1)}</b><small> kg trend</small>` : '<b>No weigh-ins</b>'}</p>
-    <p class="dim">${now && weekChange != null ? `${signed(weekChange, 2)} kg against last week's average` : now ? 'A week-on-week number shows up after 8 days.' : 'Log your first weight to start the graph.'}</p>
-    <div class="seg" role="tablist">${ranges.map(([v, l]) => `<button class="${v === range ? 'on' : ''}" data-a="setRange" data-v="${v}">${l}</button>`).join('')}</div>
-    ${lineChart({ id: 'weight', points: shown, lineKey: 't', showRaw: true, unit: 'kg', height: 210, emptyText: 'Your weight line appears here.' })}
-    <p class="legend"><i class="lg-line"></i> Trend <i class="lg-dot"></i> Scale readings</p>
-    ${now ? '<button class="link strong" data-a="openSheet" data-type="weight">Edit past weigh-ins</button>' : ''}
-  </section>
-  ${coachPanel(c)}
-  ${tips.length ? `<section class="block"><h2>Recommendations</h2><ul class="advice">${tips.map(adviceRow).join('')}</ul></section>` : ''}
-  <section class="block card"><h2>This week's sets by muscle</h2>
-    <p class="dim sm">Direct sets count as 1, indirect as 0.5. Aim for ${goal.lo} to ${goal.hi}. ${refLinks(['schoenfeld17', 'pelland26'])}</p>
-    <ul class="volume">${MUSCLE_ORDER.map(m => {
-      const v = vol[m] || 0, pctV = clamp(v / goal.hi * 100, 0, 100), lo = goal.lo / goal.hi * 100;
-      return `<li><span>${MUSCLE_NAMES[m]}${PRIORITY_MUSCLES.includes(m) ? '<sup>*</sup>' : ''}</span><div class="vol-track"><i class="vol-zone" style="left:${lo}%"></i><i class="vol-fill${v >= goal.lo ? ' met' : ''}" style="width:${pctV}%"></i></div><b>${round(v, 1)}</b></li>`;
-    }).join('')}</ul><p class="dim sm">* Extra attention for an aesthetic physique</p></section>
-  <section class="block card"><h2>Strength</h2>
-    ${liftNames.length ? `<select class="pick" data-f="liftChart" aria-label="Choose an exercise">${liftNames.slice().sort().map(n => `<option ${n === lift ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
-    ${lineChart({ id: 'lift', points: liftSeries, unit: libEntry(lift)?.unit === 'sec' ? 's' : 'kg', height: 150, decimals: 1 })}<p class="dim sm">Estimated one-rep max from your best set, using the Epley formula. Treat it as a trend, not a true max.</p>` : '<p class="empty">Finish a workout to see strength trends.</p>'}
-  </section>
-  <section class="block card"><h2>Calories, 3 weeks</h2>
-    ${barChart({ id: 'kcal', days: days14, get: d => dayTotals(d).kcal, target: state.targets.kcal, color: 'var(--accent)', unit: 'kcal' })}</section>
-  <section class="block card"><h2>Protein, 3 weeks</h2>
-    ${barChart({ id: 'protein', days: days14, get: d => dayTotals(d).p, target: state.targets.protein, color: 'var(--protein)', unit: 'g' })}</section>
-  <section class="block card"><h2>Consistency</h2>
-    ${heatmap()}<p class="legend"><i class="h-swatch h-full"></i> All quests <i class="h-swatch h-train"></i> Trained <i class="h-swatch h-log"></i> Logged</p></section>
-  ${waist.length ? `<section class="block card"><h2>Waist</h2>${lineChart({ id: 'waist', points: waist, unit: 'cm', height: 130 })}</section>` : ''}`;
+const TREND_MIN = 7; // a smooth trend means little until there's about a week of readings
+const whenWord = k => { const n = daysBetween(k, today()); return n <= 0 ? 'today' : n === 1 ? 'yesterday' : `${n} days ago`; };
+const sinceWord = k => (k === addDays(today(), -1) ? 'yesterday' : shortDate(k));
+function weightCard() {
+  const all = series('weight', 0);
+  if (!all.length) {
+    return `<section class="hero left weight-card"><p class="big-num"><b>No weigh-ins</b></p><p class="dim">Your weight graph starts with your first reading.</p>
+      <button class="btn solid wide" data-a="openSheet" data-type="weight">Log your weight</button></section>`;
+  }
+  const trended = weightTrend(all), latest = trended[trended.length - 1];
+  const useTrend = all.length >= TREND_MIN, key = useTrend ? 't' : 'v';
+  const spanAll = daysBetween(all[0].date, today());
+  // Only ranges that would show something different from All.
+  const ranges = [[14, '2W'], [30, '1M'], [90, '3M'], [365, '1Y']].filter(([d]) => spanAll > d);
+  const range = ranges.some(([d]) => d === ui.range) ? ui.range : 0;
+  const from = range ? addDays(today(), -range) : null;
+  const shown = from ? trended.filter(p => p.date >= from) : trended;
+  const a = shown[0], b = shown[shown.length - 1];
+  const change = a && b && a !== b ? round(b[key] - a[key], 1) : null;
+  const moved = change == null ? '' : change === 0 ? `no change since ${sinceWord(a.date)}` : `${change < 0 ? 'down' : 'up'} ${Math.abs(change)} kg since ${sinceWord(a.date)}`;
+  const line = useTrend ? `Trend ${round(latest.t, 1)} kg${moved ? `, ${moved}` : ''}.`
+    : moved ? `${moved[0].toUpperCase()}${moved.slice(1)}.`
+    : 'Your first weigh-in. Weigh in again tomorrow and the graph takes off.';
+  return `<section class="hero left weight-card">
+    <div class="w-head"><p class="big-num"><b>${round(latest.v, 1)}</b><small> kg</small></p><span class="dim">${whenWord(latest.date)[0].toUpperCase()}${whenWord(latest.date).slice(1)}</span></div>
+    <p class="dim">${line}</p>
+    ${ranges.length ? `<div class="seg" role="tablist">${[...ranges, [0, 'All']].map(([v, l]) => `<button class="${v === range ? 'on' : ''}" data-a="setRange" data-v="${v}">${l}</button>`).join('')}</div>` : ''}
+    ${lineChart({ id: 'weight', points: shown, lineKey: key, showRaw: true, unit: 'kg', height: 210, minSpan: 1, minDays: 6, from, to: today(), emptyText: 'No weigh-ins in this period.' })}
+    <div class="w-foot">${useTrend ? '<p class="legend"><i class="lg-line"></i> Trend <i class="lg-dot"></i> Scale readings</p>' : `<p class="dim sm w-note">A smooth trend line joins in after ${TREND_MIN} weigh-ins.</p>`}<button class="link strong" data-a="openSheet" data-type="weight">Edit past weigh-ins</button></div>
+  </section>`;
 }
+function foodCard() {
+  const kcal = ui.foodChart !== 'protein', now = today();
+  const days = Array.from({ length: 14 }, (_, n) => addDays(now, n - 13));
+  // Finished days only: today's half-eaten numbers would drag the average down every morning.
+  const logged = Array.from({ length: 7 }, (_, n) => addDays(now, -1 - n)).filter(d => dayTotals(d).items > 0);
+  const value = d => (kcal ? dayTotals(d).kcal : dayTotals(d).p);
+  const target = kcal ? state.targets.kcal : state.targets.protein, unit = kcal ? 'kcal' : 'g';
+  const hits = logged.filter(d => questsFor(d).find(q => q.id === (kcal ? 'calories' : 'protein')).done).length;
+  const text = logged.length
+    ? `Last 7 days: ${fmt(avg(logged.map(value)))} ${unit} a day on average, against a target of ${fmt(target)}. On target ${hits} of ${logged.length} logged ${logged.length === 1 ? 'day' : 'days'}.`
+    : 'Log food for a few days and your averages appear here.';
+  return `<section class="block card"><h2>Food</h2>
+    <div class="seg">${[['kcal', 'Calories'], ['protein', 'Protein']].map(([v, l]) => `<button class="${(kcal ? 'kcal' : 'protein') === v ? 'on' : ''}" data-a="setFoodChart" data-v="${v}">${l}</button>`).join('')}</div>
+    <p class="dim sm">${text}</p>
+    ${barChart({ id: 'food', days, get: value, target, color: kcal ? 'var(--accent)' : 'var(--protein)', unit })}</section>`;
+}
+// Newest first. "+12%" compares the latest session's best set with the earliest of the last eight.
+function liftRows() {
+  const names = [...new Set(state.workouts.slice().reverse().flatMap(w => w.exercises.map(e => e.name)))];
+  return names.map(name => {
+    const hist = exerciseHistory(state.workouts, name, 8).filter(h => !h.deload);
+    if (!hist.length) return null;
+    const unit = libEntry(name)?.unit || 'reps';
+    const top = hist[0].sets.filter(isWorking).sort((x, y) => setScore(y) - setScore(x))[0];
+    if (!top) return null;
+    const first = bestScore(hist[hist.length - 1].sets), last = bestScore(hist[0].sets);
+    const pct = hist.length > 1 && first > 0 ? Math.round((last / first - 1) * 100) : null;
+    return { name, text: setText(top, unit), pct };
+  }).filter(Boolean);
+}
+function trainingCard() {
+  const wk = weekStart(today()), done = state.workouts.filter(w => w.date >= wk).length;
+  const planned = Object.keys(state.program.schedule).length;
+  const lifts = liftRows(), shown = ui.showAllLifts ? lifts : lifts.slice(0, 5);
+  const vol = weeklyVolume(state.workouts, wk, muscleInfo), goal = state.muscleGoal;
+  const hit = MUSCLE_ORDER.filter(m => (vol[m] || 0) >= goal.lo).length;
+  const pctDone = planned ? clamp(done / planned * 100, 0, 100) : 0;
+  return `<section class="block card"><h2>Training</h2>
+    <div class="unlock week-count"><span>This week</span><div class="mac-track"><i style="width:${pctDone}%;background:var(--accent)"></i></div><b>${done} of ${planned}</b></div>
+    ${lifts.length ? `<h3 class="card-sub">Your lifts</h3><ul class="lift-list">${shown.map(l => `<li><button class="row" data-a="openSheet" data-type="lift" data-name="${esc(l.name)}"><span>${esc(l.name)}<em>Last session: ${esc(l.text)}</em></span><span class="lift-change${l.pct > 0 ? ' up' : ''}">${l.pct == null ? 'New' : l.pct === 0 ? 'Same' : signed(l.pct) + '%'}</span></button></li>`).join('')}</ul>
+      ${lifts.length > shown.length ? `<button class="link strong" data-a="toggleUi" data-k="showAllLifts">See all ${lifts.length} lifts</button>` : ''}
+      <p class="dim sm">The percentage is how much stronger your best set has got over your last 8 sessions.</p>` : '<p class="dim sm card-note">Finish a workout and your lifts appear here.</p>'}
+    <h3 class="card-sub">Sets per muscle</h3>
+    <p class="dim sm">${hit} of ${MUSCLE_ORDER.length} muscles have reached ${goal.lo} sets this week. Aim for ${goal.lo} to ${goal.hi} each.</p>
+    ${ui.showMuscles ? `<ul class="volume">${MUSCLE_ORDER.map(m => {
+      const v = vol[m] || 0, pctV = clamp(v / goal.hi * 100, 0, 100), lo = goal.lo / goal.hi * 100;
+      return `<li><span>${MUSCLE_NAMES[m]}</span><div class="vol-track"><i class="vol-zone" style="left:${lo}%"></i><i class="vol-fill${v >= goal.lo ? ' met' : ''}" style="width:${pctV}%"></i></div><b>${round(v, 1)}</b></li>`;
+    }).join('')}</ul><p class="dim sm">A set for the main muscle counts as 1, for a helping muscle as 0.5. ${refLinks(['schoenfeld17', 'pelland26'])}</p>` : ''}
+    <button class="link strong" data-a="toggleUi" data-k="showMuscles">${ui.showMuscles ? 'Hide muscles' : 'See every muscle'}</button>
+  </section>`;
+}
+function consistencyCard() {
+  const days = Array.from({ length: 30 }, (_, n) => addDays(today(), -n));
+  const trained = days.filter(d => workoutsOn(d).length).length;
+  const logged = days.filter(d => workoutsOn(d).length || peekDay(d).weight != null || dayTotals(d).items > 0).length;
+  if (!logged) return '';
+  return `<section class="block card"><h2>Consistency</h2>
+    <p class="dim sm">Trained on ${trained} and logged on ${logged} of the last 30 days. Tap a square to open that day.</p>
+    ${heatmap()}<p class="legend"><i class="h-swatch h-full"></i> All quests <i class="h-swatch h-train"></i> Trained <i class="h-swatch h-log"></i> Logged</p></section>`;
+}
+function viewProgress() {
+  const waist = series('waist', 0);
+  // Weighing in and protein are daily quests and the coach has its own panel, so none of them repeats here.
+  const tips = adviceList().filter(x => !['weigh', 'coach', 'review', 'protein'].includes(x.id)).slice(0, 2);
+  const needWeight = peekDay(today()).weight == null && series('weight', 0).length > 0;
+  return `
+  <header class="top"><div><h1>Progress</h1></div>${needWeight ? '<button class="btn solid small" data-a="openSheet" data-type="weight">Log weight</button>' : ''}</header>
+  ${weightCard()}
+  ${coachPanel(coachNow())}
+  ${tips.length ? `<section class="block"><h2>Recommendations</h2><ul class="advice">${tips.map(adviceRow).join('')}</ul></section>` : ''}
+  ${foodCard()}
+  ${trainingCard()}
+  ${consistencyCard()}
+  ${waist.length ? `<section class="block card"><h2>Waist</h2>${lineChart({ id: 'waist', points: waist, unit: 'cm', height: 130, minSpan: 2, minDays: 6, to: today() })}</section>` : ''}`;
+}
+const coachFoot = goal => `<div class="adv-foot"><button class="link strong" data-a="openSheet" data-type="goal">Goal: ${esc(GOALS[goal.mode].label)}</button><button class="link" data-a="openSheet" data-type="method">How this works</button></div>`;
 function coachPanel(c) {
   const goal = state.goal;
   if (c.status === 'collecting') {
     const pw = clamp(c.weighIns / c.needWeighIns, 0, 1), ps = clamp(c.sessions / c.needSessions, 0, 1);
+    const leftW = Math.max(c.needWeighIns - c.weighIns, 0), leftS = Math.max(c.needSessions - c.sessions, 0);
+    const needs = [leftW ? `${leftW} more ${leftW === 1 ? 'weigh-in' : 'weigh-ins'}` : '', leftS ? `${leftS} more ${leftS === 1 ? 'workout' : 'workouts'}` : ''].filter(Boolean).join(' and ');
     return `<section class="block coach"><h2>Calorie coach</h2>
-      <h3>${esc(c.title)}</h3><p>${esc(c.body)}</p>
+      <h3>${esc(c.title)}</h3><p>${needs ? `Eat to your target and keep logging. After ${needs}, the coach starts adjusting your calories from your real results.` : esc(c.body)}</p>
       <div class="unlock"><span>Weigh-ins</span><div class="mac-track"><i style="width:${pw * 100}%;background:var(--accent)"></i></div><b>${Math.min(c.weighIns, c.needWeighIns)} of ${c.needWeighIns}</b></div>
       <div class="unlock"><span>Workouts</span><div class="mac-track"><i style="width:${ps * 100}%;background:var(--accent)"></i></div><b>${Math.min(c.sessions, c.needSessions)} of ${c.needSessions}</b></div>
-      ${c.formula ? `<p class="dim sm">Formula estimate of what you burn: about ${fmt(c.formula)} kcal a day. Your own data will replace this guess.</p>` : ''}
-      <div class="adv-foot"><button class="link strong" data-a="openSheet" data-type="goal">Goal: ${esc(GOALS[goal.mode].label)}</button><button class="link" data-a="openSheet" data-type="method">How this works</button></div></section>`;
+      ${coachFoot(goal)}</section>`;
   }
   const act = c.status === 'raise' || c.status === 'lower';
   return `<section class="block coach${act ? ' hot' : ''}"><h2>Calorie coach</h2>
     <h3>${esc(c.title)}</h3><p>${esc(c.body)}</p>
-    <dl class="stats">
-      <div><dt>You burn about</dt><dd>${fmt(c.tdee)}<small> kcal</small></dd><dd class="dim sm">likely ${fmt(c.tdeeLo)} to ${fmt(c.tdeeHi)}</dd></div>
-      <div><dt>Weight rate</dt><dd>${signed(c.rateKgWk, 2)}<small> kg/wk</small></dd><dd class="dim sm">${signed(c.ratePct, 2)}%, range ${signed(goal.lo, 2)} to ${signed(goal.hi, 2)}%</dd></div>
-      <div><dt>Average eaten</dt><dd>${c.hasIntake ? fmt(c.intake) : 'Too few logs'}<small>${c.hasIntake ? ' kcal' : ''}</small></dd><dd class="dim sm">${c.loggedDays} days logged</dd></div>
-      <div><dt>Lifts</dt><dd>${c.strength.total ? `${c.strength.up} up` : 'Not enough'}</dd><dd class="dim sm">${c.strength.total ? `${c.strength.flat} flat, ${c.strength.down} down` : 'Needs repeat sessions'}</dd></div>
+    <dl class="kv">
+      <div><dt>You burn about</dt><dd>${fmt(c.tdee)} kcal a day</dd></div>
+      <div><dt>You eat about</dt><dd>${c.hasIntake ? `${fmt(c.intake)} kcal a day` : 'Log more food to know'}</dd></div>
+      <div><dt>Your weight is moving</dt><dd>${signed(c.rateKgWk, 2)} kg a week</dd></div>
+      <div><dt>Your goal</dt><dd>${esc(goalPace(goal, c.weight))}</dd></div>
     </dl>
-    ${!c.hasIntake ? '<p class="dim sm">Log food on more days and this estimate gets much sharper.</p>' : ''}
     ${c.warnDeficit ? `<p class="warn">This target is over 500 kcal below what you burn, where muscle gain stops in the research. ${refLinks(['murphy22'])}</p>` : ''}
     ${act ? `<div class="coach-act"><button class="btn solid" data-a="applyCoach">Set ${fmt(c.newKcal)} kcal</button><button class="btn line" data-a="openSheet" data-type="targets">Choose my own</button></div>` : ''}
-    <div class="adv-foot"><button class="link strong" data-a="openSheet" data-type="goal">Goal: ${esc(GOALS[goal.mode].label)}</button><button class="link" data-a="openSheet" data-type="method">How this works</button></div></section>`;
+    ${coachFoot(goal)}</section>`;
 }
 
 /* ---------- You ---------- */
@@ -460,7 +580,7 @@ function viewYou() {
     <li><button class="row" data-a="openSheet" data-type="goal"><span>Goal</span><span class="dim">${esc(GOALS[state.goal.mode].label)}</span></button></li>
     <li><button class="row" data-a="openSheet" data-type="programs"><span>Workout program</span><span class="dim">${esc(state.program.name)}</span></button></li>
     <li><button class="row" data-a="openSheet" data-type="schedule"><span>Weekly schedule</span><span class="dim">${Object.keys(state.program.schedule).length} days</span></button></li>
-    <li><button class="row" data-a="openSheet" data-type="profile"><span>Your details</span><span class="dim">${p.heightCm ? `${p.heightCm} cm, ${p.age}` : 'Add details'}</span></button></li>
+    <li><button class="row" data-a="openSheet" data-type="profile"><span>Your details</span><span class="dim">${p.heightCm && p.age ? `${p.heightCm} cm, ${p.age}` : 'Add details'}</span></button></li>
   </ul></section>
   <section class="block"><h2>Options</h2><ul class="rows">
     ${isInstalled() ? '' : '<li><button class="row" data-a="openSheet" data-type="installGuide"><span>Add to your Home Screen</span></button></li>'}

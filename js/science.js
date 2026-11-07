@@ -187,26 +187,26 @@ function runCoach({ today: now, days, workouts, targets, goal, profile, lastChan
     const raw = aimKcal - intake;
     const delta = -clamp(raw < 0 ? -raw : MIN_STEP, MIN_STEP, MAX_STEP);
     return finish('lower', delta, `Drop ${Math.abs(Math.round(delta / 25) * 25)} kcal`,
-      `Your weight is moving ${rateText}, above your ${signed(goal.hi, 2)}% limit, and the data is clear enough to act on.`);
+      `Your weight is moving ${rateText}, which is higher than your goal, and the data is clear enough to act on.`);
   }
   if (zBelow >= CONFIDENCE_Z) {
     const raw = aimKcal - intake;
     const delta = clamp(raw > 0 ? raw : MIN_STEP, MIN_STEP, MAX_STEP);
     const strengthNote = strength.state === 'down' ? ' Your lifts are slipping too, which makes this more urgent.' : '';
     return finish('raise', delta, `Add ${Math.round(delta / 25) * 25} kcal`,
-      `Your weight is moving ${rateText}, below your ${signed(goal.lo, 2)}% limit.${strengthNote}`);
+      `Your weight is moving ${rateText}, which is lower than your goal, and the data is clear enough to act on.${strengthNote}`);
   }
   const edgeGap = ratePct > goal.hi ? ratePct - goal.hi : ratePct < goal.lo ? goal.lo - ratePct : 0;
   if (edgeGap > 0) {
     const wait = daysToKnow(edgeGap);
     const days = wait == null ? '' : ` About ${Math.max(3, Math.min(wait, 21))} more days should settle it.`;
-    return { ...out, status: 'watch', title: 'Hold steady for now', body: `It looks like ${rateText}, slightly outside your range, but daily water swings could explain that.${days}` };
+    return { ...out, status: 'watch', title: 'Hold steady for now', body: `It looks like ${rateText}, slightly off your goal, but daily water swings could explain that.${days}` };
   }
   if (spanDays >= 21 && strength.total >= 3 && strength.state !== 'up') {
     return { ...out, status: 'review', title: 'Calories look right, lifts are flat',
       body: 'Weight is on track but most lifts have not moved in 3 weeks. Check sleep, protein and whether your sets are close enough to failure before changing food.' };
   }
-  return { ...out, status: 'hold', title: 'Keep this target', body: `${signed(rateKgWk, 2)} kg a week sits inside your range. No change needed.` };
+  return { ...out, status: 'hold', title: 'Keep this target', body: `${signed(rateKgWk, 2)} kg a week is right on your goal. No change needed.` };
 }
 
 // Keeps protein and fat, moves carbs. If carbs would go too low, fat gives way down to 0.5 g/kg (Iraki 2019).

@@ -189,12 +189,14 @@ function rowsToActive(rows, deload) {
     return { ...clone(e), planRow: e.id, chosen: deload ? 'lighter' : undefined, sets: Array.from({ length: count }, () => ({ w: '', r: '', done: false })) };
   });
 }
-function startWorkout(day) {
-  const deload = inDeload();
-  const place = atHome() && day ? 'home' : 'gym';
+// A date in the past means logging a session after the fact. It sits at midday on that day, so history stays in order.
+function startWorkout(day, date = today()) {
+  const past = date !== today();
+  const deload = !past && inDeload();
+  const place = !past && atHome() && day ? 'home' : 'gym';
   // A home version isn't a plan row, so changes to it never touch the gym plan.
   const exercises = !day ? [] : place === 'home' ? rowsToActive(homeRows(day), deload).map(e => ({ ...e, planRow: undefined })) : rowsToActive(day.exercises, deload);
-  state.active = { id: uid(), date: today(), name: day ? day.name : 'Workout', dayId: day?.id || null, place, startedAt: Date.now(), deload, exercises };
+  state.active = { id: uid(), date, name: day ? day.name : 'Workout', dayId: day?.id || null, place, startedAt: past ? parseKey(date).getTime() : Date.now(), deload, exercises };
   ui.tab = 'train';
   ui.enter = true;
   requestWake();
@@ -251,11 +253,13 @@ function finishWorkout() {
   if (open && !confirm(`${open} sets aren't ticked off and won't be saved. Finish anyway?`)) return;
   const w = { id: a.id, date: a.date, name: a.name, dayId: a.dayId, place: a.place === 'home' ? 'home' : undefined, startedAt: a.startedAt, finishedAt: Date.now(), deload: a.deload || undefined, exercises, prs: [] };
   state.workouts.push(w);
+  state.workouts.sort((x, y) => (x.startedAt || 0) - (y.startedAt || 0)); // a session logged late belongs on its own day
   recomputePRs();
-  if (!state.profile.startDate) state.profile.startDate = a.date;
+  if (!state.profile.startDate || a.date < state.profile.startDate) state.profile.startDate = a.date;
   state.active = null;
   stopRest();
   releaseWake();
+  if (a.date !== today()) { ui.tab = 'today'; ui.day = a.date; ui.enter = true; }
   ui.sheet = { type: 'summary', id: w.id };
   ui.sheetStack = [];
   if (w.prs.length) playBest(); else playClang();
@@ -318,7 +322,8 @@ function tickRest() {
 }
 function tickClock() {
   const clock = document.getElementById('clock');
-  if (clock && state.active) clock.textContent = `${Math.floor((Date.now() - state.active.startedAt) / 60000)} min`;
+  if (!clock || !state.active) return;
+  clock.textContent = state.active.date === today() ? `${Math.floor((Date.now() - state.active.startedAt) / 60000)} min` : `For ${niceDate(state.active.date)}`;
 }
 setInterval(tickClock, 15000);
 let wakeLock = null;
@@ -374,15 +379,60 @@ function restoreFromArchive(key) {
 
 const A = {
   go(d) {
-    if (d.tab === ui.tab) { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+    if (d.tab === ui.tab) {
+      if (d.tab === 'today' && ui.day) { ui.day = null; haptic(); render(); }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
     Motion.tabFrom(ui.tab, d.tab);
     ui.tab = d.tab;
-    ui.foodDate = d.tab === 'food' ? ui.foodDate : today();
+    ui.foodDate = today();
+    // Back from a day's food, you land on that day. Otherwise Today means today.
+    ui.day = d.tab === 'today' ? ui.dayBack : null;
+    ui.dayBack = null;
+    if (d.tab === 'train') ui.planDay = new Date().getDay();
     ui.enter = true;
     if (d.tab === 'progress') ui.coachAlert = false;
     render();
     window.scrollTo(0, 0);
   },
+  /* Any day's page */
+  dayOpen(d) {
+    ui.day = d.k === today() ? null : d.k;
+    ui.dayBack = null;
+    haptic();
+    if (ui.tab !== 'today') { Motion.tabFrom(ui.tab, 'today'); ui.tab = 'today'; ui.enter = true; ui.foodDate = today(); }
+    render();
+    window.scrollTo(0, 0);
+  },
+  dayWeek(d) {
+    const next = addDays(ui.day || today(), Number(d.by));
+    ui.day = next >= today() ? null : next; // never past today by arrow: tap a day this week to look ahead
+    haptic();
+    render();
+  },
+  dayFood(d) {
+    ui.dayBack = d.k;
+    ui.foodDate = d.k;
+    Motion.tabFrom(ui.tab, 'food');
+    ui.tab = 'food';
+    ui.enter = true;
+    render();
+    window.scrollTo(0, 0);
+  },
+  dayEntry(d) {
+    ui.foodDate = d.k;
+    A.openSheet({ type: 'entry', slot: d.slot, id: d.id });
+  },
+  foodToday() { ui.foodDate = today(); ui.dayBack = null; haptic(); render(); window.scrollTo(0, 0); },
+  logPast(d) {
+    if (state.active && !confirm('You already have a workout running. Replace it?')) return;
+    ui.sheet = null;
+    ui.sheetStack = [];
+    startWorkout(d.id ? findDay(d.id) : null, d.k);
+  },
+  setFoodChart(d) { ui.foodChart = d.v; haptic(); render(); },
+  toggleUi(d) { ui[d.k] = !ui[d.k]; haptic(); render(); },
   guideOs(d) { ui.guideOs = d.v; ui.enter = true; haptic(); render(); window.scrollTo(0, 0); },
   guideSheetOs(d) { ui.sheet.os = d.v; ui.sheet.q = null; haptic(); render(); },
   guideSkip() {
@@ -706,10 +756,16 @@ const A = {
   toggleSet(d) {
     const e = state.active.exercises[d.i], s = e.sets[d.j];
     if (s.done) { s.done = false; commit(); return; }
-    const hint = targetsForSet(e, Number(d.j));
-    if (s.w === '' || s.w == null) s.w = isWorking(s) && s.type !== 'drop' && hint.w != null ? hint.w : (e.sets[d.j - 1]?.w ?? 0);
-    if (s.r === '' || s.r == null) s.r = isWorking(s) && s.type !== 'drop' && hint.r != null ? hint.r : (e.sets[d.j - 1]?.r ?? 0);
-    if (!Number(s.r)) { toast(`Enter ${unitWord(e)} first`); return; }
+    const hint = targetsForSet(e, Number(d.j)), useHint = isWorking(s) && s.type !== 'drop';
+    const blank = x => x === '' || x == null;
+    const filled = (val, hinted, before) => (!blank(val) ? val : useHint && hinted != null ? hinted : blank(before) ? '' : before);
+    const w = filled(s.w, hint.w, e.sets[d.j - 1]?.w), r = filled(s.r, hint.r, e.sets[d.j - 1]?.r);
+    // Nothing is stored until the set is valid.
+    if (!Number(r)) { toast(`Enter ${unitWord(e)} first`); return; }
+    // A loaded exercise needs a weight on purpose: a stray 0 would become "last time" and steer every future target.
+    if (w === '' && (e.inc ?? 0) > 0) { toast('Enter the weight first. Type 0 if you used none.'); return; }
+    s.w = w === '' ? 0 : w;
+    s.r = r;
     s.done = true;
     haptic();
     playTick();
@@ -930,9 +986,19 @@ const A = {
   },
   goalMode(d) { ui.sheet.mode = d.v; render(); },
   saveGoal(d) {
-    const lo = num(v('g-lo').replace('−', '-')), hi = num(v('g-hi').replace('−', '-'));
+    const known = d.mode === state.goal.mode ? state.goal : GOALS[d.mode];
+    const lo = d.mode === 'custom' ? num(v('g-lo').replace('−', '-')) : known.lo, hi = d.mode === 'custom' ? num(v('g-hi').replace('−', '-')) : known.hi;
     if (lo == null || hi == null || lo >= hi) { toast('The first number must be lower than the second'); return; }
+    const next = document.getElementById('g-apply')?.checked ? suggestTargets(state.profile, latestWeight(), { lo, hi }) : null;
     state.goal = { mode: d.mode, lo, hi };
+    if (next) {
+      if (!state.targetLog.length) state.targetLog.push({ date: state.profile.startDate || addDays(today(), -14), kcal: state.targets.kcal, protein: state.targets.protein, carbs: state.targets.carbs, fat: state.targets.fat, reason: 'Starting target' });
+      if (next.kcal !== state.targets.kcal) state.kcalChangedOn = today();
+      state.targets = { ...state.targets, ...next };
+      logTargets(`New goal: ${GOALS[d.mode].label}`);
+      toast(`Target set to ${fmt(next.kcal)} kcal`);
+    }
+    haptic();
     closeSheet();
   },
   importData() { document.getElementById('restore-file')?.click(); },
@@ -1049,10 +1115,11 @@ document.addEventListener('change', async e => {
 });
 document.addEventListener('submit', e => e.preventDefault());
 // Touch and drag on any chart to read values.
-let chartEl = null;
+let chartEl = null, chartHide = null;
 document.addEventListener('pointerdown', e => {
   const el = e.target.closest('.chart');
   if (!el) return;
+  clearTimeout(chartHide); // an earlier tap's timer must not hide this one
   chartEl = el;
   const c = ui.charts[el.dataset.chart];
   if (c?.bars) moveBarCursor(el, e.clientX); else moveCursor(el, e.clientX);
@@ -1066,7 +1133,7 @@ const endChart = () => {
   if (!chartEl) return;
   const el = chartEl;
   chartEl = null;
-  setTimeout(() => { if (ui.charts[el.dataset.chart]?.bars) el.querySelector('.c-tip').hidden = true; else hideCursor(el); }, 1800);
+  chartHide = setTimeout(() => { if (ui.charts[el.dataset.chart]?.bars) el.querySelector('.c-tip').hidden = true; else hideCursor(el); }, 2200);
 };
 document.addEventListener('pointerup', endChart);
 document.addEventListener('pointercancel', endChart);
@@ -1076,7 +1143,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') { flushSave(); Cloud.pushNow(); }
   else {
     Cloud.pull();
-    if (ui.openedOn !== today()) { ui.openedOn = today(); ui.foodDate = today(); ui.planDay = new Date().getDay(); }
+    if (ui.openedOn !== today()) { ui.openedOn = today(); ui.foodDate = today(); ui.planDay = new Date().getDay(); ui.day = null; ui.dayBack = null; }
     if (state.active) requestWake();
     if (!document.activeElement || document.activeElement === document.body) render();
     swReg?.update().catch(() => {});
