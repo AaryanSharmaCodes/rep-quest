@@ -57,19 +57,22 @@ function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(writeS
 function flushSave() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; writeSave(); } }
 
 /* ---------- State ---------- */
-const APP_VERSION = 16; // matches CACHE in sw.js
+const APP_VERSION = 17; // matches CACHE in sw.js
 const THEMES = [
   { id: 'game', name: 'Quest', bar: '#170e33', fx: ['#b78eff', '#dfceff', '#ffffff', '#7f5cff'], shapes: ['star', 'circle'], burst: 1 },
   { id: 'light', name: 'Minimal', bar: '#f7f7f4', fx: ['#17171a', '#8a8a8e', '#c9c9c5'], shapes: ['circle'], burst: 0.6 },
   { id: 'dark', name: 'Dark', bar: '#0f0f11', fx: ['#ffffff', '#a1a1aa', '#52525b'], shapes: ['circle'], burst: 0.6 },
   { id: 'arcade', name: 'Arcade', bar: '#0b1026', fx: ['#ffe14d', '#ff3d81', '#29e6ff', '#7cff6b'], shapes: ['square'], burst: 1.2 },
 ];
-// His three daily supplements, from the labels (per serving).
+// His daily supplements, from the labels (per serving).
 const DEFAULT_SUPPLEMENTS = [
   { id: 'fishoil', name: 'Fish oil', detail: 'Citrus lemon, 2 softgels', kcal: 29.3, n: { o3: 1500, va: 840, vd: 15, ve: 10 }, extra: 'EPA 900 mg, DHA 600 mg, other omega-3 90 mg' },
   { id: 'glutathione', name: 'Glutathione', detail: 'Liposomal, 1 capsule', kcal: 2.3, n: {}, extra: 'Glutathione 600 mg (not a vitamin or mineral)' },
   { id: 'magnesium', name: 'Magnesium glycinate', detail: 'Maginova, 2 tablets', kcal: 0.5, n: { mg: 440 }, extra: '2,000 mg magnesium glycinate = 440 mg magnesium' },
+  { id: 'limcee', name: 'Limcee vitamin C', detail: '1 chewable tablet', kcal: 0, n: { vc: 500 }, extra: 'Vitamin C 500 mg' },
 ];
+// Raised whenever a supplement is added to the defaults, so saved lists pick it up once.
+const SUPPLEMENTS_VERSION = 2;
 function defaultState() {
   return {
     v: 2,
@@ -83,6 +86,7 @@ function defaultState() {
     checkIn: { weekday: 0, start: null, done: [], notes: '' },
     // Ticked each day under Micros; their vitamins and minerals add to the day's food.
     supplements: clone(DEFAULT_SUPPLEMENTS),
+    suppVersion: SUPPLEMENTS_VERSION,
     program: makeProgram('final'),
     muscleGoal: { lo: 10, hi: 20 },
     workouts: [],
@@ -110,6 +114,11 @@ function migrate(saved) {
     if (saved.program?.key === 'first') saved.program.name = "Founder's plan, earlier version";
     if (saved.programArchive?.final) saved.programArchive.final.name = "Founder's plan";
     const s = { ...d, ...saved, settings: { ...d.settings, ...saved.settings }, profile: { ...d.profile, ...saved.profile }, goal: { ...d.goal, ...saved.goal }, targets: { ...d.targets, ...saved.targets }, muscleGoal: { ...d.muscleGoal, ...saved.muscleGoal }, checkIn: { ...d.checkIn, ...saved.checkIn } };
+    // Supplements added to the defaults after a save was made join its list once.
+    if ((saved.suppVersion || 1) < SUPPLEMENTS_VERSION) {
+      DEFAULT_SUPPLEMENTS.forEach(x => { if (!s.supplements.some(y => y.id === x.id)) s.supplements.push(clone(x)); });
+      s.suppVersion = SUPPLEMENTS_VERSION;
+    }
     // The first check-in plan (9 Nov 2026): recomp at maintenance, 2,825 kcal and 160 g protein, 120 g on Tuesdays.
     if (!saved.checkIn) {
       const t = s.targets, fat = t.fat || 70;
