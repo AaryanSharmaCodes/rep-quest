@@ -12,6 +12,7 @@ The calorie coach starts after 10 weigh-ins and 4 workouts. It fits a line throu
 
 - USDA FoodData Central (SR Legacy, FNDDS, Foundation Foods), public domain
 - Indian Nutrient Databank: Vijayakumar A, Dubasi HB, Awasthi A, Jaacks LM. Development of an Indian Food Composition Database. Curr Dev Nutr, 2024. [Source repo](https://github.com/lindsayjaacks/Indian-Nutrient-Databank-INDB-)
+- Indian Food Composition Tables 2017: Longvah T, Ananthan R, Bhaskarachary K, Venkaiah K. National Institute of Nutrition (ICMR), Hyderabad. Read from the [ifct2017](https://www.npmjs.com/package/ifct2017) package.
 - Open Food Facts, © Open Food Facts contributors, under the [Open Database License](https://opendatacommons.org/licenses/odbl/1-0/). The extract in `foods/india.txt` and `foods/world-*.txt` is shared under the same licence.
 - About 240 everyday dishes I wrote by hand in `tools/curated-foods.js`. These are typical estimates.
 

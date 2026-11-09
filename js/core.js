@@ -57,12 +57,18 @@ function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(writeS
 function flushSave() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; writeSave(); } }
 
 /* ---------- State ---------- */
-const APP_VERSION = 15; // matches CACHE in sw.js
+const APP_VERSION = 16; // matches CACHE in sw.js
 const THEMES = [
   { id: 'game', name: 'Quest', bar: '#170e33', fx: ['#b78eff', '#dfceff', '#ffffff', '#7f5cff'], shapes: ['star', 'circle'], burst: 1 },
   { id: 'light', name: 'Minimal', bar: '#f7f7f4', fx: ['#17171a', '#8a8a8e', '#c9c9c5'], shapes: ['circle'], burst: 0.6 },
   { id: 'dark', name: 'Dark', bar: '#0f0f11', fx: ['#ffffff', '#a1a1aa', '#52525b'], shapes: ['circle'], burst: 0.6 },
   { id: 'arcade', name: 'Arcade', bar: '#0b1026', fx: ['#ffe14d', '#ff3d81', '#29e6ff', '#7cff6b'], shapes: ['square'], burst: 1.2 },
+];
+// His three daily supplements, from the labels (per serving).
+const DEFAULT_SUPPLEMENTS = [
+  { id: 'fishoil', name: 'Fish oil', detail: 'Citrus lemon, 2 softgels', kcal: 29.3, n: { o3: 1500, va: 840, vd: 15, ve: 10 }, extra: 'EPA 900 mg, DHA 600 mg, other omega-3 90 mg' },
+  { id: 'glutathione', name: 'Glutathione', detail: 'Liposomal, 1 capsule', kcal: 2.3, n: {}, extra: 'Glutathione 600 mg (not a vitamin or mineral)' },
+  { id: 'magnesium', name: 'Magnesium glycinate', detail: 'Maginova, 2 tablets', kcal: 0.5, n: { mg: 440 }, extra: '2,000 mg magnesium glycinate = 440 mg magnesium' },
 ];
 function defaultState() {
   return {
@@ -70,8 +76,13 @@ function defaultState() {
     onboarded: false,
     profile: { name: '', sex: null, age: null, heightCm: null, activity: 'moderate', level: null, startDate: null },
     goal: { mode: 'recomp', lo: GOALS.recomp.lo, hi: GOALS.recomp.hi },
-    targets: { kcal: 2500, protein: 160, carbs: 300, fat: 70, sleep: 7.5, water: 3 },
+    // dayProtein overrides protein on one weekday (0 is Sunday): no meat or eggs on Tuesdays.
+    targets: { kcal: 2825, protein: 160, carbs: 389, fat: 70, sleep: 7.5, water: 3, dayProtein: { 2: 120 } },
     targetLog: [],
+    // Weekly check-ins with Claude replace the formula coach. Every 4th one is a monthly review.
+    checkIn: { weekday: 0, start: null, done: [], notes: '' },
+    // Ticked each day under Micros; their vitamins and minerals add to the day's food.
+    supplements: clone(DEFAULT_SUPPLEMENTS),
     program: makeProgram('final'),
     muscleGoal: { lo: 10, hi: 20 },
     workouts: [],
@@ -98,7 +109,20 @@ function migrate(saved) {
     if (saved.program?.key === 'final') saved.program.name = "Founder's plan";
     if (saved.program?.key === 'first') saved.program.name = "Founder's plan, earlier version";
     if (saved.programArchive?.final) saved.programArchive.final.name = "Founder's plan";
-    return { ...d, ...saved, settings: { ...d.settings, ...saved.settings }, profile: { ...d.profile, ...saved.profile }, goal: { ...d.goal, ...saved.goal }, targets: { ...d.targets, ...saved.targets }, muscleGoal: { ...d.muscleGoal, ...saved.muscleGoal } };
+    const s = { ...d, ...saved, settings: { ...d.settings, ...saved.settings }, profile: { ...d.profile, ...saved.profile }, goal: { ...d.goal, ...saved.goal }, targets: { ...d.targets, ...saved.targets }, muscleGoal: { ...d.muscleGoal, ...saved.muscleGoal }, checkIn: { ...d.checkIn, ...saved.checkIn } };
+    // The first check-in plan (9 Nov 2026): recomp at maintenance, 2,825 kcal and 160 g protein, 120 g on Tuesdays.
+    if (!saved.checkIn) {
+      const t = s.targets, fat = t.fat || 70;
+      s.targets = { ...t, kcal: 2825, protein: 160, fat, carbs: Math.round((2825 - 160 * 4 - fat * 9) / 4), dayProtein: { 2: 120 } };
+      s.goal = { mode: 'recomp', lo: GOALS.recomp.lo, hi: GOALS.recomp.hi };
+      s.checkIn = { ...d.checkIn, start: today() };
+      s.targetLog = (s.targetLog || []).filter(x => x.date !== today());
+      // Past days keep being judged against what the target was then.
+      if (!s.targetLog.length && s.onboarded) s.targetLog.push({ date: s.profile.startDate || addDays(today(), -14), kcal: t.kcal, protein: t.protein, carbs: t.carbs, fat: t.fat, reason: 'Starting target' });
+      if (s.onboarded) s.targetLog.push({ date: today(), kcal: s.targets.kcal, protein: 160, carbs: s.targets.carbs, fat, reason: 'Coach: start of weekly check-ins' });
+      s.kcalChangedOn = today();
+    }
+    return s;
   }
   const s = defaultState();
   s.onboarded = !!saved.onboarded;
@@ -178,8 +202,11 @@ function dayTotals(k) {
 function targetsOn(k) {
   let found = null;
   state.targetLog.forEach(x => { if (x.date <= k) found = x; });
-  return found ? { ...state.targets, ...found } : state.targets;
+  const base = found ? { ...state.targets, ...found } : state.targets;
+  const dayP = state.targets.dayProtein?.[parseKey(k).getDay()];
+  return dayP != null ? { ...base, protein: dayP } : base;
 }
+const isVegDay = k => state.targets.dayProtein?.[parseKey(k).getDay()] != null;
 function latestMetric(field, upTo = today()) {
   const keys = Object.keys(state.days).filter(k => k <= upTo && state.days[k][field] != null).sort();
   if (!keys.length) return null;

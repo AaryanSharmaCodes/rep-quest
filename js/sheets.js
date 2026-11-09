@@ -13,6 +13,18 @@ function weighDateLabel(k) {
 }
 
 const SHEETS = {
+  checkIn() { return checkInSheet(); },
+  micro(s) { return microSheet(s); },
+  waist() {
+    const cur = peekDay(today()).waist, last = latestMetric('waist');
+    const past = series('waist', 0).slice().reverse().slice(0, 6);
+    return `${sheetHead(cur != null ? 'Edit waist' : 'Log waist', 'Morning, relaxed, tape level at the belly button')}
+      <div class="big-input"><button class="step" data-a="bump" data-t="wa-val" data-by="-0.5" aria-label="Down 0.5">−</button>
+        <input id="wa-val" inputmode="decimal" value="${esc(cur ?? last?.v ?? '')}" aria-label="Waist in cm"><button class="step" data-a="bump" data-t="wa-val" data-by="0.5" aria-label="Up 0.5">+</button></div>
+      <p class="center dim">cm</p>
+      <button class="btn solid wide" data-a="saveWaist">${cur != null ? 'Update waist' : 'Save waist'}</button>
+      ${past.length ? `<h3 class="sh-sub">Past measurements</h3><ul class="weigh-list">${past.map(p => `<li><div class="row"><span>${esc(niceDate(p.date))}</span><span class="dim">${p.v} cm</span></div></li>`).join('')}</ul>` : ''}`;
+  },
   weight(s) {
     const date = s.date || today();
     const cur = peekDay(date).weight;
@@ -40,7 +52,7 @@ const SHEETS = {
       <div class="form">
         <div class="two">${field(`Sleep, h`, 'l-sleep', d.sleep, 'inputmode="decimal"')}${field('Water, L', 'l-water', d.water, 'inputmode="decimal"')}</div>
         ${field('Cardio, minutes', 'l-cardio', d.cardio, 'inputmode="numeric"')}
-        ${state.settings.showWaist ? field('Waist, cm', 'l-waist', d.waist, 'inputmode="decimal"') : ''}
+        ${field('Waist, cm', 'l-waist', d.waist, 'inputmode="decimal"')}
         <label>Note<textarea id="l-note" rows="2">${esc(d.note || '')}</textarea></label>
         <button class="btn solid wide" data-a="saveLog" data-k="${date}">Save</button>
       </div>`;
@@ -289,6 +301,8 @@ const SHEETS = {
         ${field('Calories', 't-kcal', t.kcal, 'inputmode="numeric" data-f="targetCheck"')}
         <div class="three">${field('Protein, g', 't-protein', t.protein, 'inputmode="numeric" data-f="targetCheck"')}${field('Carbs, g', 't-carbs', t.carbs, 'inputmode="numeric" data-f="targetCheck"')}${field('Fat, g', 't-fat', t.fat, 'inputmode="numeric" data-f="targetCheck"')}</div>
         <p class="sm dim" id="macro-sum">${macroSumText(t.protein, t.carbs, t.fat, t.kcal)}</p>
+        ${field('Protein on Tuesdays, g', 't-tue-protein', t.dayProtein?.[2] ?? '', 'inputmode="numeric" placeholder="Same as every day"')}
+        <p class="sm dim">No meat or eggs on Tuesdays. Calories stay the same, so the rest comes from carbs.</p>
         <button class="link" type="button" data-a="balanceCarbs">Set carbs to fit the calories</button>
         ${pr ? `<p class="sm dim">At ${round(w, 1)} kg, research suggests ${pr[0]} to ${pr[1]} g protein ${refLinks(['morton18', 'iraki19'])} and ${fr[0]} to ${fr[1]} g fat ${refLinks(['iraki19'])}.</p>` : ''}
         <div class="two">${field('Sleep, h', 't-sleep', t.sleep, 'inputmode="decimal"')}${field('Water, L', 't-water', t.water, 'inputmode="decimal"')}</div>
@@ -298,13 +312,10 @@ const SHEETS = {
     const mode = s.mode || state.goal.mode;
     const g = mode === state.goal.mode ? state.goal : GOALS[mode];
     const w = latestWeight();
-    const t = state.targets;
-    const next = goalShift(t, state.goal, g, w, state.profile);
-    const offer = next && mode !== state.goal.mode && next.kcal !== t.kcal;
-    return `${sheetHead('Your goal', 'You can change this any time')}
+    return `${sheetHead('Your goal', 'Calories and protein are set at your check-ins')}
       <div class="plan-cards">${Object.entries(GOALS).map(([k, x]) => `<button class="plan-card${mode === k ? ' on' : ''}" data-a="goalMode" data-v="${k}"><b>${esc(x.label)}</b><span>${esc(x.plain || x.says)}</span>${k !== 'custom' && w ? `<small>${esc(goalPace(x, w))}</small>` : ''}</button>`).join('')}</div>
       ${mode === 'custom' ? `<div class="form"><p class="sm dim">How fast your weight should change each week, as a percentage of your body weight. Use a minus to lose weight.</p><div class="two">${field('From, %', 'g-lo', g.lo, 'inputmode="text"')}${field('To, %', 'g-hi', g.hi, 'inputmode="text"')}</div></div>` : ''}
-      <div class="form sheet-foot">${offer ? `<label class="row-check"><input type="checkbox" class="sw" id="g-apply" checked><span>Change my calories from ${fmt(t.kcal)} to ${fmt(next.kcal)} kcal a day. Protein stays at ${t.protein} g.</span></label>` : ''}
+      <div class="form sheet-foot"><p class="sm dim">Changing goal doesn't change your targets. Bring it up at your next check-in and Claude sets the new numbers.</p>
       <button class="btn solid wide" data-a="saveGoal" data-mode="${mode}">Save goal</button></div>`;
   },
   method() {
@@ -334,6 +345,7 @@ const SHEETS = {
       <ul class="papers">
         <li><b>USDA FoodData Central</b><p class="sm dim">SR Legacy, FNDDS and Foundation Foods. Public domain.</p></li>
         <li><b>Indian Nutrient Databank</b><p class="sm dim">Vijayakumar A, Dubasi HB, Awasthi A, Jaacks LM. Development of an Indian Food Composition Database. Curr Dev Nutr, 2024. Over 1,000 Indian recipes.</p></li>
+        <li><b>Indian Food Composition Tables 2017</b><p class="sm dim">Longvah T, Ananthan R, Bhaskarachary K, Venkaiah K. National Institute of Nutrition (ICMR), Hyderabad, 2017. 528 raw Indian foods with lab-measured vitamins and minerals, read from the ifct2017 package by Subhajit Sahu.</p></li>
         <li><b>Open Food Facts</b><p class="sm dim">Packaged foods from the Open Food Facts contributors, under the Open Database License. The extract in this app is shared under the same licence. Labels are crowd-sourced, so check odd values.</p></li>
         <li><b>Typical estimates</b><p class="sm dim">About 240 everyday dishes written by hand. Oil and portion size can change them a lot.</p></li>
         <li><b>free-exercise-db</b><p class="sm dim">Exercise instructions and images, released into the public domain under the Unlicense.</p></li>

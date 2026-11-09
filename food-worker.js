@@ -7,7 +7,7 @@ const synonyms = new Map();
 let vocab = null;
 
 const isWord = c => (c >= 97 && c <= 122) || (c >= 48 && c <= 57);
-const SRC_RANK = { c: 60, i: 48, s: 42, f: 40, l: 30, o: 10 };
+const SRC_RANK = { c: 60, i: 48, n: 45, s: 42, f: 40, l: 30, o: 10 };
 const PINS = {
   rice: 'White rice / chawal', chawal: 'White rice / chawal', egg: 'Egg, whole', eggs: 'Egg, whole', anda: 'Egg, whole', dahi: 'Curd / dahi', curd: 'Curd / dahi', milk: 'Milk, toned', doodh: 'Milk, toned',
   chicken: 'Chicken breast, cooked', dal: 'Dal, home-cooked', daal: 'Dal, home-cooked', roti: 'Roti / chapati', chapati: 'Roti / chapati', bread: 'Whole wheat bread', potato: 'Potato, boiled', aloo: 'Potato, boiled',
@@ -70,9 +70,9 @@ function wordAt(low, needle, from, end) {
   }
 }
 function parseLine(line) {
-  const [name, brand, kcal, p, c, f, servings, src, code] = line.split('\t');
+  const [name, brand, kcal, p, c, f, servings, src, code, mi] = line.split('\t');
   return {
-    name, brand, kcal: +kcal, p: +p, c: +c, f: +f, src, code: code || '',
+    name, brand, kcal: +kcal, p: +p, c: +c, f: +f, src, code: code || '', mi: mi || '', mk: +kcal,
     servings: servings ? servings.split('|').map(s => { const [label, g] = s.split(':'); return { label, g: +g }; }).filter(s => s.g > 0) : [],
   };
 }
@@ -123,7 +123,10 @@ function run(tokens, limit) {
         if (!all) { i = end + 1; continue; }
 
         const nameLen = tab1 - start;
-        const srcCode = raw.charAt(raw.lastIndexOf('\t', raw.lastIndexOf('\t', end - 1) - 1) + 1);
+        // Columns: name, brand, kcal, p, c, f, servings, src, code, micros. The source is the letter after the 7th tab.
+        let t = start - 1;
+        for (let n = 0; n < 7 && t < end; n++) t = raw.indexOf('\t', t + 1);
+        const srcCode = raw.charAt(t + 1);
         let score = SRC_RANK[srcCode] ?? 10;
         if (chunk.name === 'india.txt') score += 14;
         if (inName === tokens.length) score += 22;
@@ -217,16 +220,41 @@ function search(query) {
 }
 function byBarcode(code) {
   for (const chunk of chunks) {
-    const i = chunk.raw.indexOf('\t' + code + '\n');
+    const i = chunk.raw.indexOf('\t' + code + '\t');
     if (i >= 0) {
       const start = chunk.raw.lastIndexOf('\n', i) + 1;
-      return parseLine(chunk.raw.slice(start, i + code.length + 1));
+      let end = chunk.raw.indexOf('\n', i);
+      if (end < 0) end = chunk.raw.length;
+      return parseLine(chunk.raw.slice(start, end));
     }
   }
   return null;
 }
 
+// Finds foods by source + exact name (and brand when given), for entries logged before foods carried micronutrients.
+function lookup(items) {
+  const found = {};
+  for (const item of items) {
+    const [src, name, brand] = item.split('\t');
+    for (const chunk of chunks) {
+      const raw = chunk.raw;
+      let i = raw.startsWith(name + '\t') ? 0 : raw.indexOf('\n' + name + '\t');
+      while (i >= 0) {
+        const start = i === 0 && raw.startsWith(name + '\t') ? 0 : i + 1;
+        let end = raw.indexOf('\n', start);
+        if (end < 0) end = raw.length;
+        const f = parseLine(raw.slice(start, end));
+        if (f.src === src && (!brand || f.brand === brand)) { found[item] = { mi: f.mi, kcal: f.kcal }; break; }
+        i = raw.indexOf('\n' + name + '\t', end - 1);
+      }
+      if (found[item]) break;
+    }
+  }
+  return found;
+}
+
 onmessage = ({ data }) => {
+  if (data.type === 'lookup') postMessage({ type: 'lookup', id: data.id, found: lookup(data.items) });
   if (data.type === 'search') postMessage({ type: 'results', id: data.id, ...search(data.q) });
   if (data.type === 'barcode') postMessage({ type: 'barcode', id: data.id, food: byBarcode(data.code) });
 };

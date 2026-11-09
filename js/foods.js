@@ -1,6 +1,6 @@
 'use strict';
 // Talks to the search worker, plus online lookups for anything the bundled database misses.
-const SOURCE_NAMES = { c: 'Typical estimate', i: 'Indian Nutrient Databank', s: 'USDA FNDDS', f: 'USDA Foundation', l: 'USDA SR Legacy', o: 'Open Food Facts', u: 'USDA online', m: 'My food' };
+const SOURCE_NAMES = { c: 'Typical estimate', i: 'Indian Nutrient Databank', s: 'USDA FNDDS', f: 'USDA Foundation', l: 'USDA SR Legacy', o: 'Open Food Facts', u: 'USDA online', m: 'My food', n: 'IFCT 2017 (NIN)' };
 
 const Foods = {
   worker: null, pending: new Map(), nextId: 1, ready: false, waiting: [],
@@ -22,9 +22,9 @@ const Foods = {
     } catch (e) { return; }
     this.worker.onmessage = ({ data }) => {
       if (data.type === 'ready') { this.ready = true; this.waiting.splice(0).forEach(w => w.go()); }
-      if (data.type === 'progress') { ui.foodDb = { loaded: data.loaded, total: data.total, done: data.done }; onFoodProgress(); }
+      if (data.type === 'progress') { ui.foodDb = { loaded: data.loaded, total: data.total, done: data.done }; onFoodProgress(); if (data.done) backfillMicros(); }
       if (data.type === 'partial') { ui.foodDb = { ...ui.foodDb, partial: true }; onFoodProgress(); }
-      if (data.type === 'results' || data.type === 'barcode') {
+      if (data.type === 'results' || data.type === 'barcode' || data.type === 'lookup') {
         const cb = this.pending.get(data.id);
         if (cb) { this.pending.delete(data.id); cb(data); }
       }
@@ -62,7 +62,7 @@ async function searchUSDA(q) {
     const kcal = n[1008] ?? n[2047] ?? n[2048];
     if (kcal == null) return null;
     const servings = f.servingSize > 0 && /g|ml/i.test(f.servingSizeUnit || '') ? [{ label: f.householdServingFullText || `${f.servingSize} g`, g: f.servingSize }] : [];
-    return { name: f.description, brand: f.brandName || f.brandOwner || '', kcal, p: n[1003] || 0, c: n[1005] || 0, f: n[1004] || 0, servings, src: 'u' };
+    return { name: f.description, brand: f.brandName || f.brandOwner || '', kcal, p: n[1003] || 0, c: n[1005] || 0, f: n[1004] || 0, servings, src: 'u', mi: usdaMicros(f.foodNutrients), mk: kcal };
   }).filter(Boolean);
 }
 const offToFood = p => {
@@ -70,7 +70,7 @@ const offToFood = p => {
   const kcal = n['energy-kcal_100g'] ?? (n.energy_100g != null ? n.energy_100g / 4.184 : null);
   if (kcal == null || !p.product_name) return null;
   const g = parseFloat(p.serving_quantity);
-  return { name: p.product_name, brand: (p.brands || '').split(',')[0], kcal, p: n.proteins_100g || 0, c: n.carbohydrates_100g || 0, f: n.fat_100g || 0, servings: g > 0 ? [{ label: p.serving_size || `${g} g`, g }] : [], src: 'o', code: p.code || '' };
+  return { name: p.product_name, brand: (p.brands || '').split(',')[0], kcal, p: n.proteins_100g || 0, c: n.carbohydrates_100g || 0, f: n.fat_100g || 0, servings: g > 0 ? [{ label: p.serving_size || `${g} g`, g }] : [], src: 'o', code: p.code || '', mi: offMicros(n), mk: kcal };
 };
 async function searchOFF(q) {
   const fields = 'code,product_name,brands,nutriments,serving_size,serving_quantity';

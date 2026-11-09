@@ -3,6 +3,7 @@ const ICON = {
   today: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.500"/></svg>',
   train: '<svg viewBox="0 0 24 24"><path d="M7 12h10M7 6.500v11M4 9v6M17 6.500v11M20 9v6"/></svg>',
   food: '<svg viewBox="0 0 24 24"><path d="M7 3v8M4 3v5a3 3 0 0 0 6 0V3M7 11v10M18 21v-7h-3V8c0-3 1.500-5 3-5z"/></svg>',
+  micros: '<svg viewBox="0 0 24 24"><path d="M10 2.500h4M11 2.500v5.200L5.300 18.400A2 2 0 0 0 7.100 21.500h9.800a2 2 0 0 0 1.800-3.100L13 7.700V2.500M7.500 14h9"/></svg>',
   progress: '<svg viewBox="0 0 24 24"><path d="M3 3v18h18M7 15l4-5 3 3 6-7"/></svg>',
   you: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4.500 4-6.500 8-6.500s7 2 8 6.500"/></svg>',
   swap: '<svg viewBox="0 0 24 24"><path d="M4 8h13l-4-4M20 16H7l4 4"/></svg>',
@@ -65,25 +66,17 @@ function stalledLifts() {
 }
 function adviceList() {
   const list = [];
-  const now = today(), d = peekDay(now), t = dayTotals(now), tg = state.targets;
+  const now = today(), d = peekDay(now), t = dayTotals(now), tg = targetsOn(now);
   const hour = new Date().getHours();
   const skip = id => state.dismissed[id] && state.dismissed[id] > now;
   const add = o => { if (!skip(o.id)) list.push(o); };
 
-  if (state.needsDetails || !bmr(state.profile, 70)) {
-    add({ id: 'details', title: 'Add your height and age', body: 'The coach uses them for its first estimate of what you burn.', action: ['Add details', 'sheet', { type: 'profile' }], hold: true });
-  }
-  const c = coachNow();
-  if (c.status === 'raise' || c.status === 'lower') {
-    add({ id: 'coach', tone: 'hot', title: c.title, body: `${c.body} New target: ${fmt(c.newKcal)} kcal.`, action: ['Review', 'go', { tab: 'progress' }], refs: ['hall08'], hold: true });
-  } else if (c.status === 'review') {
-    add({ id: 'review', title: c.title, body: c.body, action: ['See lifts', 'go', { tab: 'progress' }] });
-  }
+  // Calories are set at check-ins with Claude, so there is no formula coach here.
   if (d.weight == null) add({ id: 'weigh', title: 'Weigh in', body: 'First thing in the morning. One reading never matters, but the trend does.', action: ['Log weight', 'sheet', { type: 'weight' }], hold: true });
 
   const leftP = tg.protein - t.p;
   if (leftP > 20 && hour >= 11) {
-    const picks = proteinPicks(leftP);
+    const picks = proteinPicks(leftP, isVegDay(now));
     add({ id: `protein`, title: `${Math.round(leftP)} g protein left`, body: picks.length ? `Easy ways to get there: ${picks.join(', ')}.` : 'Protein is your biggest lever on this plan.', action: ['Log food', 'sheet', { type: 'food', slot: slotNow(), date: now }], refs: ['morton18'] });
   }
 
@@ -111,9 +104,9 @@ function adviceList() {
   if (Cloud.enabled() && !Cloud.user() && (state.workouts.length || Object.keys(state.days).length > 3)) add({ id: 'signin', title: 'Sign in to keep your data safe', body: 'Right now your data lives only on this phone. Signing in with Google saves it to your account.', action: ['Continue with Google', 'cloudSignIn', {}], hold: true });
   return list;
 }
-function proteinPicks(left) {
-  const staples = [['Whey', 30, 24], ['150 g chicken breast', 150, 46], ['3 eggs', 150, 19], ['Greek yogurt', 150, 14], ['100 g paneer', 100, 19], ['Soya chunks', 50, 26]];
-  const fits = staples.filter(s => s[2] <= left + 12).sort((a, b) => b[2] - a[2]).slice(0, 2);
+function proteinPicks(left, veg = false) {
+  const staples = [['Whey', 30, 24], ['150 g chicken breast', 150, 46, 'meat'], ['3 eggs', 150, 19, 'meat'], ['Greek yogurt', 150, 14], ['100 g paneer', 100, 19], ['Soya chunks', 50, 26]];
+  const fits = staples.filter(s => !(veg && s[3]) && s[2] <= left + 12).sort((a, b) => b[2] - a[2]).slice(0, 2);
   return fits.map(s => `${s[0]} (${s[2]} g)`);
 }
 function slotNow() {
@@ -215,6 +208,8 @@ function viewToday() {
   </header>
   <div class="xp"><div class="xp-track"><i data-k="xp" data-pct="${s.into / s.need * 100}" style="width:${s.into / s.need * 100}%"></i></div><p>${fmt(s.into)} / ${fmt(s.need)} XP</p></div>
   ${weekStrip(k)}
+  ${checkInCard()}
+  ${suppToday()}
   <p class="day-quote">${esc(quoteFor(k))}</p>
   <section class="block first">
     <div class="q-head"><h2>Daily Quests</h2><span class="q-count">[${cleared.length} / ${quests.length}]</span></div>
@@ -522,12 +517,14 @@ function viewProgress() {
   return `
   <header class="top"><div><h1>Progress</h1></div>${needWeight ? '<button class="btn solid small" data-a="openSheet" data-type="weight">Log weight</button>' : ''}</header>
   ${weightCard()}
-  ${coachPanel(coachNow())}
+  ${checkInPanel()}
   ${tips.length ? `<section class="block"><h2>Recommendations</h2><ul class="advice">${tips.map(adviceRow).join('')}</ul></section>` : ''}
   ${foodCard()}
   ${trainingCard()}
   ${consistencyCard()}
-  ${waist.length ? `<section class="block card"><h2>Waist</h2>${lineChart({ id: 'waist', points: waist, unit: 'cm', height: 130, minSpan: 2, minDays: 6, to: today() })}</section>` : ''}`;
+  <section class="block card"><div class="q-head"><h2>Waist</h2><button class="link strong" data-a="openSheet" data-type="waist">${peekDay(today()).waist != null ? 'Edit today' : 'Log waist'}</button></div>
+    <p class="dim sm">${waist.length ? `${waist[waist.length - 1].v} cm ${whenWord(waist[waist.length - 1].date)}${waist.length > 1 ? `, ${signed(round(waist[waist.length - 1].v - waist[0].v, 1), 1)} cm since ${sinceWord(waist[0].date)}` : ''}.` : 'Once a week is enough: first thing in the morning, relaxed, tape level at the belly button.'}</p>
+    ${waist.length ? lineChart({ id: 'waist', points: waist, unit: 'cm', height: 130, minSpan: 2, minDays: 6, to: today() }) : ''}</section>`;
 }
 const coachFoot = goal => `<div class="adv-foot"><button class="link strong" data-a="openSheet" data-type="goal">Goal: ${esc(GOALS[goal.mode].label)}</button><button class="link" data-a="openSheet" data-type="method">How this works</button></div>`;
 function coachPanel(c) {
@@ -567,7 +564,7 @@ function viewYou() {
   <dl class="tally"><div><dd data-count="${s.workouts}" data-k="t-workouts">${s.workouts}</dd><dt>Workouts</dt></div><div><dd data-count="${s.prs}" data-k="t-prs">${s.prs}</dd><dt>New bests</dt></div><div><dd>${(s.volume / 1000).toFixed(1)}</dd><dt>Tonnes lifted</dt></div><div><dd data-count="${s.clearedDays}" data-k="t-days">${s.clearedDays}</dd><dt>Days cleared</dt></div></dl>
   <section class="block"><h2>Theme</h2><div class="themes">${THEMES.map(t => `<button class="theme-card${state.settings.theme === t.id ? ' on' : ''}" data-a="setTheme" data-v="${t.id}" aria-pressed="${state.settings.theme === t.id}"><span class="tc tc-${t.id}"><i></i><i></i><i></i></span><b>${t.name}</b></button>`).join('')}</div></section>
   <section class="block"><h2>Plan</h2><ul class="rows">
-    <li><button class="row" data-a="openSheet" data-type="targets"><span>Daily targets</span><span class="dim">${fmt(t.kcal)} kcal, ${t.protein} g protein</span></button></li>
+    <li><button class="row" data-a="openSheet" data-type="targets"><span>Daily targets</span><span class="dim">${fmt(t.kcal)} kcal, ${t.protein} g protein${t.dayProtein?.[2] != null ? ` (${t.dayProtein[2]} g Tue)` : ''}</span></button></li>
     <li><button class="row" data-a="openSheet" data-type="goal"><span>Goal</span><span class="dim">${esc(GOALS[state.goal.mode].label)}</span></button></li>
     <li><button class="row" data-a="openSheet" data-type="programs"><span>Workout program</span><span class="dim">${esc(state.program.name)}</span></button></li>
     <li><button class="row" data-a="openSheet" data-type="schedule"><span>Weekly schedule</span><span class="dim">${Object.keys(state.program.schedule).length} days</span></button></li>
@@ -576,7 +573,6 @@ function viewYou() {
   <section class="block"><h2>Options</h2><ul class="rows">
     ${isInstalled() ? '' : '<li><button class="row" data-a="openSheet" data-type="installGuide"><span>Add to your Home Screen</span></button></li>'}
     <li><label class="row"><span>Log reps in reserve</span><input type="checkbox" class="sw" data-f="setting" data-k="showRir" ${state.settings.showRir ? 'checked' : ''}></label></li>
-    <li><label class="row"><span>Track waist too</span><input type="checkbox" class="sw" data-f="setting" data-k="showWaist" ${state.settings.showWaist ? 'checked' : ''}></label></li>
     <li><label class="row"><span>Animations</span><input type="checkbox" class="sw" data-f="setting" data-k="animations" ${state.settings.animations !== false ? 'checked' : ''}></label></li>
     <li><label class="row"><span>Sounds</span><input type="checkbox" class="sw" data-f="setting" data-k="sound" ${state.settings.sound ? 'checked' : ''}></label></li>
   </ul></section>

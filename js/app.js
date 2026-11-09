@@ -45,7 +45,7 @@ const haptic = (() => {
 })();
 
 /* ---------- Render ---------- */
-const VIEWS = { today: viewToday, train: viewTrain, food: viewFood, progress: viewProgress, you: viewYou };
+const VIEWS = { today: viewToday, train: viewTrain, food: viewFood, micros: viewMicros, progress: viewProgress, you: viewYou };
 function render() {
   const app = document.getElementById('app');
   const onWelcome = !state.onboarded;
@@ -65,7 +65,7 @@ function render() {
   Motion.afterRender(app, entering);
 }
 // The bar stays in the page between renders, so its marker can slide from tab to tab.
-const TAB_LIST = [['today', 'Today'], ['train', 'Train'], ['food', 'Food'], ['progress', 'Progress'], ['you', 'You']];
+const TAB_LIST = [['today', 'Today'], ['train', 'Train'], ['food', 'Food'], ['micros', 'Micros'], ['progress', 'Progress'], ['you', 'You']];
 function renderTabs(onWelcome) {
   const el = document.getElementById('tabs');
   if (onWelcome) { el.innerHTML = ''; return; }
@@ -128,12 +128,13 @@ function logEntry(date, slot, entry) {
   const d = getDay(date);
   d.meals = d.meals || {};
   (d.meals[slot] = d.meals[slot] || []).push({ ...entry, id: uid() });
+  if (entry.mi === undefined && entry.source !== 'm') setTimeout(backfillMicros, 0);
 }
 function addToRecent(food) {
   state.recentFoods = [food, ...state.recentFoods.filter(f => f.id !== food.id)].slice(0, 40);
 }
 function compactFood(f) {
-  return { id: f.id, name: f.name, brand: f.brand || '', kcal: f.kcal, p: f.p, c: f.c, f: f.f, servings: f.servings, src: f.src };
+  return { id: f.id, name: f.name, brand: f.brand || '', kcal: f.kcal, p: f.p, c: f.c, f: f.f, servings: f.servings, src: f.src, mi: f.mi, mk: f.mk ?? f.kcal };
 }
 function targetSlotAndDate() {
   const parent = ui.sheet?.type === 'food' ? ui.sheet : ui.sheetStack.find(x => x.type === 'food');
@@ -592,6 +593,43 @@ const A = {
       toast(swReg.installing || swReg.waiting ? 'Update found, installing' : `You're on the latest version`);
     } catch (e) { toast('No connection, try again with signal'); }
   },
+  saveWaist() {
+    const w = num(v('wa-val'));
+    if (w == null || w < 30 || w > 250) { toast('Enter your waist in cm'); return; }
+    getDay(today()).waist = round(w, 1);
+    haptic();
+    closeSheet();
+  },
+  /* Check-ins with Claude */
+  saveCheckInInputs() {
+    const w = num(v('ci-waist'));
+    const day = getDay(today());
+    if (w != null && w > 30 && w < 250) day.waist = w; else if (document.getElementById('ci-waist') && !v('ci-waist').trim()) delete day.waist;
+    state.checkIn.notes = v('ci-notes') ?? state.checkIn.notes;
+  },
+  async copyCheckIn() {
+    A.saveCheckInInputs();
+    const text = checkInReport();
+    commit();
+    try {
+      await navigator.clipboard.writeText(text);
+      toast('Report copied. Paste it to Claude.');
+    } catch (e) {
+      if (navigator.share) { try { await navigator.share({ text }); return; } catch (err) { /* cancelled */ } }
+      toast('Copy didn\'t work. Press and hold the report to select it.');
+    }
+    haptic();
+  },
+  finishCheckIn() {
+    A.saveCheckInInputs();
+    const s = checkInStatus();
+    state.checkIn.done.push({ date: today(), kind: s.monthly ? 'monthly' : 'weekly', number: s.number });
+    state.checkIn.notes = '';
+    const next = checkInStatus();
+    toast(`Check-in done. Next one ${DAY_NAMES[parseKey(next.due).getDay()]} ${shortDate(next.due)}.`);
+    haptic();
+    closeSheet();
+  },
   saveLog(d) {
     const day = getDay(d.k);
     [['sleep', 'l-sleep'], ['water', 'l-water'], ['cardio', 'l-cardio'], ['waist', 'l-waist']].forEach(([key, id]) => {
@@ -603,6 +641,23 @@ const A = {
     if (note) day.note = note; else delete day.note;
     closeSheet();
   },
+
+  /* Micronutrients and supplements */
+  toggleSupp(d) {
+    const day = getDay(d.k || today());
+    const list = day.supps || [];
+    day.supps = list.includes(d.id) ? list.filter(x => x !== d.id) : [...list, d.id];
+    if (!day.supps.length) delete day.supps;
+    haptic();
+    commit();
+  },
+  allSupps(d) {
+    getDay(d.k || today()).supps = state.supplements.map(s => s.id);
+    haptic();
+    toast('Supplements ticked');
+    commit();
+  },
+  microRange(d) { ui.microRange = d.v; render(); },
 
   /* Food */
   foodDay(d) {
@@ -619,7 +674,7 @@ const A = {
     const { parent, date, slot } = targetSlotAndDate();
     const g = f.servings[0]?.g || 100;
     const m = macrosFor(f, g);
-    logEntry(date, slot, { name: f.name, ...m, grams: g, amount: f.servings[0]?.label || '100 g', source: f.src });
+    logEntry(date, slot, { name: f.name, ...m, grams: g, amount: f.servings[0]?.label || '100 g', source: f.src, mi: f.mi, mk: f.mk ?? f.kcal });
     addToRecent(compactFood(f));
     bumpAdded(parent);
     haptic();
@@ -656,7 +711,7 @@ const A = {
     const { parent, date } = targetSlotAndDate();
     const amount = unit === -1 ? `${round(qty, 1)} g` : qty === 1 ? f.servings[unit].label : `${round(qty, 2)} × ${f.servings[unit].label}`;
     const logged = macrosFor(f, grams);
-    logEntry(date, slot, { name: f.name, ...logged, grams, amount, source: f.src });
+    logEntry(date, slot, { name: f.name, ...logged, grams, amount, source: f.src, mi: f.mi, mk: f.mk ?? f.kcal });
     addToRecent(compactFood(f));
     bumpAdded(parent);
     ui.sheet = ui.sheetStack.pop() || null;
@@ -676,7 +731,7 @@ const A = {
     const total = kcal ?? p * 4 + c * 4 + f * 9;
     if (!total) { toast('Enter calories or macros'); return; }
     const { parent, date, slot } = targetSlotAndDate();
-    logEntry(date, slot, { name, kcal: total, p, c, f, amount: '1 serving', source: 'm' });
+    logEntry(date, slot, { name, kcal: total, p, c, f, amount: '1 serving', source: 'm', mi: '' });
     if (document.getElementById('c-save')?.checked && name !== 'Quick add') {
       // Stored per 100 g with a 100 g "serving", so one tap logs exactly what was typed.
       state.customFoods.unshift({ id: `m:${uid()}`, name, kcal: total, p, c, f, servings: [{ label: '1 serving', g: 100 }], src: 'm' });
@@ -978,6 +1033,8 @@ const A = {
     const t = state.targets, before = `${t.kcal}/${t.protein}/${t.carbs}/${t.fat}`;
     const next = { kcal: num(v('t-kcal')), protein: num(v('t-protein')), carbs: num(v('t-carbs')), fat: num(v('t-fat')), sleep: num(v('t-sleep')), water: num(v('t-water')) };
     if (Object.values(next).some(x => x == null || x < 0)) { toast('Fill in every target'); return; }
+    const tue = num(v('t-tue-protein'));
+    next.dayProtein = tue != null && tue >= 0 && tue !== next.protein ? { ...t.dayProtein, 2: tue } : (({ 2: _, ...rest }) => rest)(t.dayProtein || {});
     if (!state.targetLog.length) state.targetLog.push({ date: state.profile.startDate || addDays(today(), -14), kcal: t.kcal, protein: t.protein, carbs: t.carbs, fat: t.fat, reason: 'Starting target' });
     if (next.kcal !== t.kcal) state.kcalChangedOn = today();
     state.targets = { ...t, ...next };
@@ -989,15 +1046,7 @@ const A = {
     const known = d.mode === state.goal.mode ? state.goal : GOALS[d.mode];
     const lo = d.mode === 'custom' ? num(v('g-lo').replace('−', '-')) : known.lo, hi = d.mode === 'custom' ? num(v('g-hi').replace('−', '-')) : known.hi;
     if (lo == null || hi == null || lo >= hi) { toast('The first number must be lower than the second'); return; }
-    const next = document.getElementById('g-apply')?.checked ? goalShift(state.targets, state.goal, { lo, hi }, latestWeight(), state.profile) : null;
     state.goal = { mode: d.mode, lo, hi };
-    if (next) {
-      if (!state.targetLog.length) state.targetLog.push({ date: state.profile.startDate || addDays(today(), -14), kcal: state.targets.kcal, protein: state.targets.protein, carbs: state.targets.carbs, fat: state.targets.fat, reason: 'Starting target' });
-      if (next.kcal !== state.targets.kcal) state.kcalChangedOn = today();
-      state.targets = { ...state.targets, ...next };
-      logTargets(`New goal: ${GOALS[d.mode].label}`);
-      toast(`Target set to ${fmt(next.kcal)} kcal`);
-    }
     haptic();
     closeSheet();
   },
@@ -1153,10 +1202,9 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('pagehide', flushSave);
 
-// A dot on the Progress tab when the coach has a calorie change to review.
+// A dot on the Progress tab when a check-in with Claude is due.
 function refreshCoachAlert() {
-  const c = state.onboarded ? coachNow() : null;
-  ui.coachAlert = ui.tab !== 'progress' && (c?.status === 'raise' || c?.status === 'lower');
+  ui.coachAlert = state.onboarded && ui.tab !== 'progress' && checkInStatus().isDue;
 }
 
 /* ---------- Themes ---------- */
