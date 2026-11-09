@@ -298,12 +298,13 @@ const SHEETS = {
     const mode = s.mode || state.goal.mode;
     const g = mode === state.goal.mode ? state.goal : GOALS[mode];
     const w = latestWeight();
-    const next = suggestTargets(state.profile, w, g);
-    const offer = next && mode !== state.goal.mode && next.kcal !== state.targets.kcal;
+    const t = state.targets;
+    const next = goalShift(t, state.goal, g, w, state.profile);
+    const offer = next && mode !== state.goal.mode && next.kcal !== t.kcal;
     return `${sheetHead('Your goal', 'You can change this any time')}
       <div class="plan-cards">${Object.entries(GOALS).map(([k, x]) => `<button class="plan-card${mode === k ? ' on' : ''}" data-a="goalMode" data-v="${k}"><b>${esc(x.label)}</b><span>${esc(x.plain || x.says)}</span>${k !== 'custom' && w ? `<small>${esc(goalPace(x, w))}</small>` : ''}</button>`).join('')}</div>
       ${mode === 'custom' ? `<div class="form"><p class="sm dim">How fast your weight should change each week, as a percentage of your body weight. Use a minus to lose weight.</p><div class="two">${field('From, %', 'g-lo', g.lo, 'inputmode="text"')}${field('To, %', 'g-hi', g.hi, 'inputmode="text"')}</div></div>` : ''}
-      <div class="form sheet-foot">${offer ? `<label class="row-check"><input type="checkbox" class="sw" id="g-apply" checked><span>Change my daily target to ${fmt(next.kcal)} kcal and ${next.protein} g protein</span></label>` : ''}
+      <div class="form sheet-foot">${offer ? `<label class="row-check"><input type="checkbox" class="sw" id="g-apply" checked><span>Change my calories from ${fmt(t.kcal)} to ${fmt(next.kcal)} kcal a day. Protein stays at ${t.protein} g.</span></label>` : ''}
       <button class="btn solid wide" data-a="saveGoal" data-mode="${mode}">Save goal</button></div>`;
   },
   method() {

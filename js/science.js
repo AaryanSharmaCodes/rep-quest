@@ -231,6 +231,16 @@ function suggestTargets(profile, weight, goal) {
   const protein = Math.round(1.8 * weight), fat = Math.round(0.8 * weight);
   return { kcal, protein, fat, carbs: Math.max(0, Math.round((kcal - protein * 4 - fat * 9) / 4)) };
 }
+// Changing goal moves calories by the gap between the two goals' middle rates and leaves protein and fat alone,
+// so the person's own numbers survive and switching back returns exactly to where they were.
+function goalShift(targets, from, to, weight, profile) {
+  if (!weight || !targets?.kcal) return null;
+  const mid = g => (g.lo + g.hi) / 2;
+  const step = Math.round(weight * (mid(to) - mid(from)) / 100 / 7 * KCAL_PER_KG / 25) * 25;
+  const b = bmr(profile, weight);
+  const kcal = b ? Math.max(targets.kcal + step, Math.round(b / 25) * 25) : targets.kcal + step;
+  return adjustMacros(targets, kcal, weight);
+}
 const proteinRange = w => [Math.round(1.6 * w), Math.round(2.2 * w)];
 const fatRange = w => [Math.round(0.5 * w), Math.round(1.5 * w)];
 

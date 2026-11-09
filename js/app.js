@@ -989,7 +989,7 @@ const A = {
     const known = d.mode === state.goal.mode ? state.goal : GOALS[d.mode];
     const lo = d.mode === 'custom' ? num(v('g-lo').replace('−', '-')) : known.lo, hi = d.mode === 'custom' ? num(v('g-hi').replace('−', '-')) : known.hi;
     if (lo == null || hi == null || lo >= hi) { toast('The first number must be lower than the second'); return; }
-    const next = document.getElementById('g-apply')?.checked ? suggestTargets(state.profile, latestWeight(), { lo, hi }) : null;
+    const next = document.getElementById('g-apply')?.checked ? goalShift(state.targets, state.goal, { lo, hi }, latestWeight(), state.profile) : null;
     state.goal = { mode: d.mode, lo, hi };
     if (next) {
       if (!state.targetLog.length) state.targetLog.push({ date: state.profile.startDate || addDays(today(), -14), kcal: state.targets.kcal, protein: state.targets.protein, carbs: state.targets.carbs, fat: state.targets.fat, reason: 'Starting target' });
