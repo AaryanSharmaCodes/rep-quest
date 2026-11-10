@@ -210,6 +210,7 @@ function viewToday() {
   ${weekStrip(k)}
   ${checkInCard()}
   ${suppToday()}
+  ${waistToday()}
   <p class="day-quote">${esc(quoteFor(k))}</p>
   <section class="block first">
     <div class="q-head"><h2>Daily Quests</h2><span class="q-count">[${cleared.length} / ${quests.length}]</span></div>
@@ -508,6 +509,13 @@ function consistencyCard() {
   return `<section class="block card"><h2>Consistency</h2>
     <p class="dim sm">Trained on ${trained} and logged on ${logged} of the last 30 days. Tap a square to open that day.</p>
     ${heatmap()}<p class="legend"><i class="h-swatch h-full"></i> All quests <i class="h-swatch h-train"></i> Trained <i class="h-swatch h-log"></i> Logged</p></section>`;
+}
+// Always on Today, so a measurement is one tap away.
+function waistToday() {
+  const waist = series('waist', 0), cur = peekDay(today()).waist, last = waist[waist.length - 1];
+  const change = waist.length > 1 ? `, ${signed(round(last.v - waist[0].v, 1), 1)} cm since ${sinceWord(waist[0].date)}` : '';
+  return `<section class="block card waist-today"><div class="q-head"><h2>Waist</h2><button class="link strong" data-a="openSheet" data-type="waist">${cur != null ? 'Edit today' : 'Log waist'}</button></div>
+    <p class="dim sm">${last ? `${last.v} cm ${whenWord(last.date)}${change}.` : 'Not measured yet. Once a week, in the morning, tape at the belly button.'}</p></section>`;
 }
 function viewProgress() {
   const waist = series('waist', 0);
