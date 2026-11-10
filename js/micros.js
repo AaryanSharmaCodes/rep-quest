@@ -102,7 +102,7 @@ function entryMicros(e) {
   });
   return { value, est };
 }
-const suppTaken = k => peekDay(k).supps || [];
+const suppTaken = k => (peekDay(k).supps || []).filter(id => state.supplements.some(s => s.id === id));
 function dayMicros(k) {
   MicroMeta.load();
   const n = MICRO_KEYS.length;

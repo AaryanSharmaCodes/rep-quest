@@ -57,7 +57,7 @@ function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(writeS
 function flushSave() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; writeSave(); } }
 
 /* ---------- State ---------- */
-const APP_VERSION = 22; // matches CACHE in sw.js
+const APP_VERSION = 23; // matches CACHE in sw.js
 const THEMES = [
   { id: 'game', name: 'Quest', bar: '#170e33', fx: ['#b78eff', '#dfceff', '#ffffff', '#7f5cff'], shapes: ['star', 'circle'], burst: 1 },
   { id: 'light', name: 'Minimal', bar: '#f7f7f4', fx: ['#17171a', '#8a8a8e', '#c9c9c5'], shapes: ['circle'], burst: 0.6 },
@@ -67,13 +67,13 @@ const THEMES = [
 // His daily supplements, from the labels (per serving).
 const DEFAULT_SUPPLEMENTS = [
   { id: 'fishoil', name: 'Fish oil', detail: 'Citrus lemon, 2 softgels', kcal: 29.3, n: { o3: 1500, va: 840, vd: 15, ve: 10 }, extra: 'EPA 900 mg, DHA 600 mg, other omega-3 90 mg' },
-  { id: 'glutathione', name: 'Glutathione', detail: 'Liposomal, 1 capsule', kcal: 2.3, n: {}, extra: 'Glutathione 600 mg (not a vitamin or mineral)' },
   { id: 'magnesium', name: 'Magnesium glycinate', detail: 'Maginova, 2 tablets', kcal: 0.5, n: { mg: 440 }, extra: '2,000 mg magnesium glycinate = 440 mg magnesium' },
   { id: 'limcee', name: 'Limcee vitamin C', detail: '1 chewable tablet', kcal: 0, n: { vc: 500 }, extra: 'Vitamin C 500 mg' },
-  { id: 'creatine', name: 'Creatine', detail: 'Monohydrate, 3 g', kcal: 0, n: {}, extra: 'Creatine monohydrate 3 g (not a vitamin or mineral)' },
 ];
-// Raised whenever a supplement is added to the defaults, so saved lists pick it up once.
-const SUPPLEMENTS_VERSION = 3;
+// Raised whenever the defaults change, so saved lists pick up additions once.
+const SUPPLEMENTS_VERSION = 4;
+// Only supplements that add vitamins, minerals or calories belong here (removed 11 Nov 2026).
+const DROPPED_SUPPLEMENTS = ['glutathione', 'creatine'];
 function defaultState() {
   return {
     v: 2,
@@ -118,6 +118,13 @@ function migrate(saved) {
     // Supplements added to the defaults after a save was made join its list once.
     if ((saved.suppVersion || 1) < SUPPLEMENTS_VERSION) {
       DEFAULT_SUPPLEMENTS.forEach(x => { if (!s.supplements.some(y => y.id === x.id)) s.supplements.push(clone(x)); });
+      s.supplements = s.supplements.filter(x => !DROPPED_SUPPLEMENTS.includes(x.id));
+      Object.values(s.days).forEach(d => {
+        if (!d.supps) return;
+        d.supps = d.supps.filter(id => !DROPPED_SUPPLEMENTS.includes(id));
+        if (!d.supps.length) delete d.supps;
+      });
+      s.dismissed = { ...s.dismissed, creatine: true }; // he already takes it, so no tip suggesting it
       s.suppVersion = SUPPLEMENTS_VERSION;
     }
     // The first check-in plan (9 Nov 2026): recomp at maintenance, 2,825 kcal and 160 g protein, 120 g on Tuesdays.

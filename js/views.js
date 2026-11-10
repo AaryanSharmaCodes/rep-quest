@@ -103,7 +103,7 @@ function adviceList() {
   const sleep = series('sleep', 7).map(x => x.v);
   if (sleep.length >= 4 && avg(sleep) < 7) add({ id: 'sleep', title: `Sleep is averaging ${round(avg(sleep), 1)} h`, body: `Aim for ${tg.sleep} to 9 hours. Recovery shows up in your lifts before anywhere else.` });
 
-  if (!state.dismissed.creatine && !state.supplements.some(x => x.id === 'creatine')) add({ id: 'creatine', title: 'Creatine is the best-supported supplement', body: '3 to 5 g every day, including rest days. You can log it as a food to remember it.', refs: ['kreider17'], once: true });
+  if (!state.dismissed.creatine) add({ id: 'creatine', title: 'Creatine is the best-supported supplement', body: '3 to 5 g every day, including rest days. You can log it as a food to remember it.', refs: ['kreider17'], once: true });
   if (Cloud.enabled() && !Cloud.user() && (state.workouts.length || Object.keys(state.days).length > 3)) add({ id: 'signin', title: 'Sign in to keep your data safe', body: 'Right now your data lives only on this phone. Signing in with Google saves it to your account.', action: ['Continue with Google', 'cloudSignIn', {}], hold: true });
   return list;
 }
