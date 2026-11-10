@@ -57,7 +57,7 @@ function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(writeS
 function flushSave() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; writeSave(); } }
 
 /* ---------- State ---------- */
-const APP_VERSION = 21; // matches CACHE in sw.js
+const APP_VERSION = 22; // matches CACHE in sw.js
 const THEMES = [
   { id: 'game', name: 'Quest', bar: '#170e33', fx: ['#b78eff', '#dfceff', '#ffffff', '#7f5cff'], shapes: ['star', 'circle'], burst: 1 },
   { id: 'light', name: 'Minimal', bar: '#f7f7f4', fx: ['#17171a', '#8a8a8e', '#c9c9c5'], shapes: ['circle'], burst: 0.6 },
@@ -70,9 +70,10 @@ const DEFAULT_SUPPLEMENTS = [
   { id: 'glutathione', name: 'Glutathione', detail: 'Liposomal, 1 capsule', kcal: 2.3, n: {}, extra: 'Glutathione 600 mg (not a vitamin or mineral)' },
   { id: 'magnesium', name: 'Magnesium glycinate', detail: 'Maginova, 2 tablets', kcal: 0.5, n: { mg: 440 }, extra: '2,000 mg magnesium glycinate = 440 mg magnesium' },
   { id: 'limcee', name: 'Limcee vitamin C', detail: '1 chewable tablet', kcal: 0, n: { vc: 500 }, extra: 'Vitamin C 500 mg' },
+  { id: 'creatine', name: 'Creatine', detail: 'Monohydrate, 3 g', kcal: 0, n: {}, extra: 'Creatine monohydrate 3 g (not a vitamin or mineral)' },
 ];
 // Raised whenever a supplement is added to the defaults, so saved lists pick it up once.
-const SUPPLEMENTS_VERSION = 2;
+const SUPPLEMENTS_VERSION = 3;
 function defaultState() {
   return {
     v: 2,
