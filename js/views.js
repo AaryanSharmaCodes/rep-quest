@@ -513,9 +513,9 @@ function consistencyCard() {
 // Always on Today, so a measurement is one tap away.
 function waistToday() {
   const waist = series('waist', 0), cur = peekDay(today()).waist, last = waist[waist.length - 1];
-  const change = waist.length > 1 ? `, ${signed(round(last.v - waist[0].v, 1), 1)} cm since ${sinceWord(waist[0].date)}` : '';
+  const change = waist.length > 1 ? `, ${signed(round(waistIn(last.v) - waistIn(waist[0].v), 1), 1)} ${waistUnit()} since ${sinceWord(waist[0].date)}` : '';
   return `<section class="block card waist-today"><div class="q-head"><h2>Waist</h2><button class="link strong" data-a="openSheet" data-type="waist">${cur != null ? 'Edit today' : 'Log waist'}</button></div>
-    <p class="dim sm">${last ? `${last.v} cm ${whenWord(last.date)}${change}.` : 'Not measured yet. Once a week, in the morning, tape at the belly button.'}</p></section>`;
+    <p class="dim sm">${last ? `${waistText(last.v)} ${whenWord(last.date)}${change}.` : 'Not measured yet. Once a week, in the morning, tape at the belly button.'}</p></section>`;
 }
 function viewProgress() {
   const waist = series('waist', 0);
@@ -531,8 +531,8 @@ function viewProgress() {
   ${trainingCard()}
   ${consistencyCard()}
   <section class="block card"><div class="q-head"><h2>Waist</h2><button class="link strong" data-a="openSheet" data-type="waist">${peekDay(today()).waist != null ? 'Edit today' : 'Log waist'}</button></div>
-    <p class="dim sm">${waist.length ? `${waist[waist.length - 1].v} cm ${whenWord(waist[waist.length - 1].date)}${waist.length > 1 ? `, ${signed(round(waist[waist.length - 1].v - waist[0].v, 1), 1)} cm since ${sinceWord(waist[0].date)}` : ''}.` : 'Once a week is enough: first thing in the morning, relaxed, tape level at the belly button.'}</p>
-    ${waist.length ? lineChart({ id: 'waist', points: waist, unit: 'cm', height: 130, minSpan: 2, minDays: 6, to: today() }) : ''}</section>`;
+    <p class="dim sm">${waist.length ? `${waistText(waist[waist.length - 1].v)} ${whenWord(waist[waist.length - 1].date)}${waist.length > 1 ? `, ${signed(round(waistIn(waist[waist.length - 1].v) - waistIn(waist[0].v), 1), 1)} ${waistUnit()} since ${sinceWord(waist[0].date)}` : ''}.` : 'Once a week is enough: first thing in the morning, relaxed, tape level at the belly button.'}</p>
+    ${waist.length ? lineChart({ id: 'waist', points: waist.map(p => ({ ...p, v: waistIn(p.v) })), unit: waistUnit(), height: 130, minSpan: 2, minDays: 6, to: today() }) : ''}</section>`;
 }
 const coachFoot = goal => `<div class="adv-foot"><button class="link strong" data-a="openSheet" data-type="goal">Goal: ${esc(GOALS[goal.mode].label)}</button><button class="link" data-a="openSheet" data-type="method">How this works</button></div>`;
 function coachPanel(c) {

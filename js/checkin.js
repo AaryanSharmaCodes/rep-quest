@@ -80,7 +80,7 @@ function checkInReport(s = checkInStatus()) {
 
   const waist = series('waist', 0).filter(w => w.date <= s.to);
   lines.push('', 'WAIST (cm, at the belly button)');
-  lines.push(waist.length ? waist.slice(-6).map(w => `${dayLabel(w.date)} ${w.v}`).join(' | ') : 'Not measured yet.');
+  lines.push(waist.length ? waist.slice(-6).map(w => `${dayLabel(w.date)} ${round(w.v, 1)}`).join(' | ') : 'Not measured yet.');
 
   lines.push('', 'FOOD');
   lines.push(`Logged ${now.food.length} of ${now.days.length} days. Average on logged days: ${now.kcal == null ? '–' : fmt(now.kcal)} kcal, ${now.protein == null ? '–' : Math.round(now.protein)} g protein. Previous period: ${prev.kcal == null ? '–' : fmt(prev.kcal)} kcal, ${prev.protein == null ? '–' : Math.round(prev.protein)} g protein.`);
@@ -94,7 +94,7 @@ function checkInReport(s = checkInStatus()) {
     for (let n = 0; n < 4; n++) {
       const a = addDays(s.from, n * 7), b = n === 3 ? s.to : addDays(a, 6), w = periodNumbers(a, b);
       const wst = waist.filter(x => x.date >= a && x.date <= b).pop();
-      lines.push(`${dayLabel(a)}: weight ${r1(w.weight)}, ${w.kcal == null ? '–' : fmt(w.kcal)} kcal, ${w.protein == null ? '–' : Math.round(w.protein)} g P, ${w.workouts.length} workouts${wst ? `, waist ${wst.v}` : ''}`);
+      lines.push(`${dayLabel(a)}: weight ${r1(w.weight)}, ${w.kcal == null ? '–' : fmt(w.kcal)} kcal, ${w.protein == null ? '–' : Math.round(w.protein)} g P, ${w.workouts.length} workouts${wst ? `, waist ${round(wst.v, 1)}` : ''}`);
     }
   }
 
@@ -153,7 +153,7 @@ function checkInSheet() {
   return `${sheetHead(`${checkInName(s)} #${s.number}`, `${dayLabel(s.from)} to ${dayLabel(s.to)}`)}
     <ol class="steps ci-steps"><li>Measure your waist and add how the week felt.</li><li>Copy the report and paste it to Claude.</li><li>Enter the new targets Claude gives you in Daily targets.</li></ol>
     <div class="form">
-      <label>Waist today, cm<input id="ci-waist" inputmode="decimal" value="${esc(waistToday ?? '')}" placeholder="${lastWaist ? `Last: ${lastWaist.v}` : 'At the belly button'}"></label>
+      <label>Waist today, ${waistUnit()}<input id="ci-waist" inputmode="decimal" value="${esc(waistToday != null ? waistIn(waistToday) : '')}" placeholder="${lastWaist ? `Last: ${waistIn(lastWaist.v)}` : 'At the belly button'}"></label>
       <p class="sm dim">First thing in the morning, relaxed, tape level at the belly button.</p>
       <label>How did the week feel?<textarea id="ci-notes" rows="3" placeholder="Energy, hunger, sleep, anything that hurt">${esc(state.checkIn.notes || '')}</textarea></label>
     </div>

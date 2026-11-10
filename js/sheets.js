@@ -15,15 +15,17 @@ function weighDateLabel(k) {
 const SHEETS = {
   checkIn() { return checkInSheet(); },
   micro(s) { return microSheet(s); },
-  waist() {
+  waist(s) {
     const cur = peekDay(today()).waist, last = latestMetric('waist');
     const past = series('waist', 0).slice().reverse().slice(0, 6);
+    const shown = s.draft ?? cur ?? last?.v, unit = waistUnit();
     return `${sheetHead(cur != null ? 'Edit waist' : 'Log waist', 'Morning, relaxed, tape level at the belly button')}
+      <div class="seg wa-unit">${[['cm', 'Centimetres'], ['in', 'Inches']].map(([u, l]) => `<button class="${unit === u ? 'on' : ''}" data-a="waistUnit" data-v="${u}">${l}</button>`).join('')}</div>
       <div class="big-input"><button class="step" data-a="bump" data-t="wa-val" data-by="-0.5" aria-label="Down 0.5">−</button>
-        <input id="wa-val" inputmode="decimal" value="${esc(cur ?? last?.v ?? '')}" aria-label="Waist in cm"><button class="step" data-a="bump" data-t="wa-val" data-by="0.5" aria-label="Up 0.5">+</button></div>
-      <p class="center dim">cm</p>
+        <input id="wa-val" inputmode="decimal" value="${esc(shown != null ? waistIn(shown) : '')}" aria-label="Waist in ${unit === 'in' ? 'inches' : 'cm'}"><button class="step" data-a="bump" data-t="wa-val" data-by="0.5" aria-label="Up 0.5">+</button></div>
+      <p class="center dim">${unit === 'in' ? 'inches' : 'cm'}</p>
       <button class="btn solid wide" data-a="saveWaist">${cur != null ? 'Update waist' : 'Save waist'}</button>
-      ${past.length ? `<h3 class="sh-sub">Past measurements</h3><ul class="weigh-list">${past.map(p => `<li><div class="row"><span>${esc(niceDate(p.date))}</span><span class="dim">${p.v} cm</span></div></li>`).join('')}</ul>` : ''}`;
+      ${past.length ? `<h3 class="sh-sub">Past measurements</h3><ul class="weigh-list">${past.map(p => `<li><div class="row"><span>${esc(niceDate(p.date))}</span><span class="dim">${waistText(p.v)}</span></div></li>`).join('')}</ul>` : ''}`;
   },
   weight(s) {
     const date = s.date || today();
@@ -52,7 +54,7 @@ const SHEETS = {
       <div class="form">
         <div class="two">${field(`Sleep, h`, 'l-sleep', d.sleep, 'inputmode="decimal"')}${field('Water, L', 'l-water', d.water, 'inputmode="decimal"')}</div>
         ${field('Cardio, minutes', 'l-cardio', d.cardio, 'inputmode="numeric"')}
-        ${field('Waist, cm', 'l-waist', d.waist, 'inputmode="decimal"')}
+        ${field(`Waist, ${waistUnit()}`, 'l-waist', d.waist != null ? waistIn(d.waist) : null, 'inputmode="decimal"')}
         <label>Note<textarea id="l-note" rows="2">${esc(d.note || '')}</textarea></label>
         <button class="btn solid wide" data-a="saveLog" data-k="${date}">Save</button>
       </div>`;

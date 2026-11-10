@@ -57,7 +57,7 @@ function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(writeS
 function flushSave() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; writeSave(); } }
 
 /* ---------- State ---------- */
-const APP_VERSION = 18; // matches CACHE in sw.js
+const APP_VERSION = 19; // matches CACHE in sw.js
 const THEMES = [
   { id: 'game', name: 'Quest', bar: '#170e33', fx: ['#b78eff', '#dfceff', '#ffffff', '#7f5cff'], shapes: ['star', 'circle'], burst: 1 },
   { id: 'light', name: 'Minimal', bar: '#f7f7f4', fx: ['#17171a', '#8a8a8e', '#c9c9c5'], shapes: ['circle'], burst: 0.6 },
@@ -100,7 +100,7 @@ function defaultState() {
     homeChoice: {},
     deloadUntil: null,
     dismissed: {},
-    settings: { usdaKey: '', sound: true, showRir: false, showWaist: false, theme: 'game', animations: true, place: 'gym', placeOn: null, homeGear: {} },
+    settings: { usdaKey: '', sound: true, showRir: false, showWaist: false, waistUnit: 'cm', theme: 'game', animations: true, place: 'gym', placeOn: null, homeGear: {} },
   };
 }
 
@@ -222,6 +222,12 @@ function latestMetric(field, upTo = today()) {
   const date = keys[keys.length - 1];
   return { date, v: state.days[date][field] };
 }
+// Waist is always stored in cm; these show and read it in whichever unit he picked.
+const waistUnit = () => state.settings.waistUnit === 'in' ? 'in' : 'cm';
+const waistIn = cm => waistUnit() === 'in' ? round(cm / 2.54, 1) : round(cm, 1);
+const waistText = cm => `${waistIn(cm)} ${waistUnit()}`;
+const waistToCm = n => n == null ? null : waistUnit() === 'in' ? round(n * 2.54, 2) : round(n, 1);
+const waistValid = cm => cm != null && cm >= 30 && cm <= 250;
 function series(field, days = 90) {
   const from = days ? addDays(today(), -days) : '0000';
   return Object.keys(state.days).filter(k => k >= from && state.days[k][field] != null).sort().map(k => ({ date: k, v: state.days[k][field] }));

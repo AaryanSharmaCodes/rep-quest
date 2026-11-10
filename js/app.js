@@ -593,18 +593,26 @@ const A = {
       toast(swReg.installing || swReg.waiting ? 'Update found, installing' : `You're on the latest version`);
     } catch (e) { toast('No connection, try again with signal'); }
   },
+  waistUnit(d) {
+    if (waistUnit() === d.v) return;
+    const typed = waistToCm(num(v('wa-val')));
+    state.settings.waistUnit = d.v === 'in' ? 'in' : 'cm';
+    if (waistValid(typed)) ui.sheet.draft = typed;
+    document.activeElement?.blur();
+    commit(); haptic();
+  },
   saveWaist() {
-    const w = num(v('wa-val'));
-    if (w == null || w < 30 || w > 250) { toast('Enter your waist in cm'); return; }
-    getDay(today()).waist = round(w, 1);
+    const w = waistToCm(num(v('wa-val')));
+    if (!waistValid(w)) { toast(`Enter your waist in ${waistUnit() === 'in' ? 'inches' : 'cm'}`); return; }
+    getDay(today()).waist = w;
     haptic();
     closeSheet();
   },
   /* Check-ins with Claude */
   saveCheckInInputs() {
-    const w = num(v('ci-waist'));
+    const w = waistToCm(num(v('ci-waist')));
     const day = getDay(today());
-    if (w != null && w > 30 && w < 250) day.waist = w; else if (document.getElementById('ci-waist') && !v('ci-waist').trim()) delete day.waist;
+    if (waistValid(w)) day.waist = w; else if (document.getElementById('ci-waist') && !v('ci-waist').trim()) delete day.waist;
     state.checkIn.notes = v('ci-notes') ?? state.checkIn.notes;
   },
   async copyCheckIn() {
@@ -634,7 +642,7 @@ const A = {
     const day = getDay(d.k);
     [['sleep', 'l-sleep'], ['water', 'l-water'], ['cardio', 'l-cardio'], ['waist', 'l-waist']].forEach(([key, id]) => {
       if (!document.getElementById(id)) return;
-      const n = num(v(id));
+      const n = key === 'waist' ? waistToCm(num(v(id))) : num(v(id));
       if (n == null) delete day[key]; else day[key] = n;
     });
     const note = v('l-note').trim();
