@@ -141,7 +141,7 @@ const SHEETS = {
     const tagFor = sets => { let n = 0; return sets.map(x => (x.type === 'warmup' ? 'W' : x.type === 'drop' ? 'D' : ++n)); };
     return `${sheetHead(w.name, `${niceDate(w.date)}, ${setCount} sets. Tap a number to correct it`)}
       ${w.exercises.map((e, ei) => `<div class="hist-ex"><h3>${esc(e.name)}</h3>
-        <table class="sets compact"><tbody>${e.sets.map((x, si) => `<tr><td class="dim">${tagFor(e.sets)[si]}</td><td><input inputmode="decimal" value="${x.w ?? 0}" data-f="histSet" data-e="${ei}" data-j="${si}" data-k="w" aria-label="Weight"></td><td class="dim">kg</td><td><input inputmode="numeric" value="${x.r ?? 0}" data-f="histSet" data-e="${ei}" data-j="${si}" data-k="r" aria-label="Reps"></td><td class="dim">${e.unit === 'sec' ? 's' : 'reps'}</td></tr>`).join('')}</tbody></table></div>`).join('')}
+        <table class="sets compact"><tbody>${e.sets.map((x, si) => `<tr><td class="dim">${tagFor(e.sets)[si]}</td>${showKg(e) ? `<td><input inputmode="decimal" value="${x.w ?? 0}" data-f="histSet" data-e="${ei}" data-j="${si}" data-k="w" aria-label="Weight"></td><td class="dim">kg</td>` : ''}<td><input inputmode="numeric" value="${x.r ?? 0}" data-f="histSet" data-e="${ei}" data-j="${si}" data-k="r" aria-label="Reps"></td><td class="dim">${e.unit === 'sec' ? 's' : 'reps'}</td></tr>`).join('')}</tbody></table></div>`).join('')}
       <button class="link danger block-link" data-a="deleteWorkout">Delete this workout</button>`;
   },
   exercise(s) {

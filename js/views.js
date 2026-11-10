@@ -22,7 +22,10 @@ const ICON = {
 const i = name => `<span class="ic">${ICON[name]}</span>`;
 const refLinks = keys => (keys || []).filter(k => REFS[k]).map(k => `<a class="ref" href="https://doi.org/${REFS[k].doi}" target="_blank" rel="noopener">${esc(REFS[k].who)}</a>`).join(' ');
 const fmtKg = w => (w === 0 || w == null ? 'BW' : `${round(w, 2)}`);
-const setText = (s, unit) => (unit === 'sec' ? `${s.w ? fmtKg(s.w) + ' kg × ' : ''}${s.r} s` : `${fmtKg(s.w)}${s.w ? ' kg' : ''} × ${s.r}`);
+const setText = (s, unit) => (unit === 'sec' ? `${s.w ? fmtKg(s.w) + ' kg × ' : ''}${s.r} s` : s.w ? `${fmtKg(s.w)} kg × ${s.r}` : `${s.r} reps`);
+// Bodyweight moves log reps only. Weight comes back if you add some on purpose (a backpack, a vest) or logged it before.
+const isBodyweight = e => { const lib = libOrCustom(e.name); return lib?.equip === 'bodyweight' || (e.inc ?? lib?.inc) === 0; };
+const showKg = e => !isBodyweight(e) || !!e.loaded || (Array.isArray(e.sets) && e.sets.some(s => Number(s.w) > 0));
 const GOOGLE_G = '<svg class="g-mark" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.600-.2-2.300H12v4.500h6.500a5.500 5.500 0 0 1-2.400 3.600v3h3.900c2.300-2.100 3.500-5.200 3.500-8.800z"/><path fill="#34A853" d="M12 24c3.200 0 6-1.100 8-2.900l-3.900-3a7.200 7.200 0 0 1-10.800-3.800h-4v3.100A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.300 14.300a7.200 7.200 0 0 1 0-4.600V6.600h-4a12 12 0 0 0 0 10.800z"/><path fill="#EA4335" d="M12 4.800c1.800 0 3.300.6 4.600 1.800l3.400-3.400A12 12 0 0 0 1.300 6.600l4 3.100A7.200 7.200 0 0 1 12 4.800z"/></svg>';
 // "40 kg × 9, 8, 8" when the weight stayed the same, otherwise each set in full.
 function lastTimeText(sets, unit) {
@@ -344,6 +347,7 @@ function exerciseBlock(e, ei) {
   const n = nextFor(e, hist);
   const chosen = e.chosen || n.chosen;
   const showRir = state.settings.showRir || e.mode === 'rir';
+  const kg = showKg(e), sec = e.unit === 'sec';
   const prevWork = last ? last.sets.filter(isWorking) : [];
   let workingIndex = 0;
   const rows = e.sets.map((s, si) => {
@@ -356,14 +360,14 @@ function exerciseBlock(e, ei) {
     const tag = s.type === 'warmup' ? 'W' : s.type === 'drop' ? 'D' : s.type === 'failure' ? 'F' : wIdx + 1;
     return `<tr class="${s.done ? 'set-done' : ''}">
       <td><button class="set-tag t-${s.type || 'work'}" data-a="cycleType" data-i="${ei}" data-j="${si}" aria-label="Set type">${tag}</button></td>
-      <td class="prev${s.done && prev && isWorking(s) && setScore({ w: Number(s.w) || 0, r: Number(s.r) || 0 }) > setScore(prev) + 0.001 ? ' beat' : ''}">${prev ? `${prev.w ? round(prev.w, 2) : 'BW'} × ${prev.r}` : ''}</td>
-      <td><input inputmode="decimal" enterkeyhint="next" aria-label="Weight" value="${esc(s.w)}" placeholder="${hintW === 0 ? '' : hintW}" data-f="set" data-i="${ei}" data-j="${si}" data-k="w"></td>
+      <td class="prev${s.done && prev && isWorking(s) && setScore({ w: Number(s.w) || 0, r: Number(s.r) || 0 }) > setScore(prev) + 0.001 ? ' beat' : ''}">${prev ? (prev.w ? `${round(prev.w, 2)} × ${prev.r}` : kg ? `BW × ${prev.r}` : `${prev.r}${sec ? ' s' : ''}`) : ''}</td>
+      ${kg ? `<td><input inputmode="decimal" enterkeyhint="next" aria-label="Weight" value="${esc(s.w)}" placeholder="${hintW === 0 ? '' : hintW}" data-f="set" data-i="${ei}" data-j="${si}" data-k="w"></td>` : ''}
       <td><input inputmode="numeric" enterkeyhint="done" aria-label="${unitWord(e)}" value="${esc(s.r)}" placeholder="${hintR}" data-f="set" data-i="${ei}" data-j="${si}" data-k="r"></td>
       ${showRir ? `<td><input inputmode="numeric" aria-label="Reps in reserve" value="${esc(s.rir ?? '')}" placeholder="${e.rirGoal ?? 2}" data-f="set" data-i="${ei}" data-j="${si}" data-k="rir"></td>` : ''}
       <td><button class="tick${s.done ? ' on' : ''}" data-a="toggleSet" data-i="${ei}" data-j="${si}" aria-label="Mark set done" aria-pressed="${!!s.done}">${ICON.tick}</button></td>
     </tr>`;
   }).join('');
-  const options = n.options.length ? `<div class="opts">${n.options.map(o => `<button class="opt${o.id === chosen ? ' on' : ''}" data-a="chooseOption" data-i="${ei}" data-o="${o.id}"><b>${esc(o.label)}</b><span>${o.w ? `${round(o.w, 2)} kg` : 'BW'} × ${o.reps[0]}</span></button>`).join('')}</div>` : '';
+  const options = n.options.length ? `<div class="opts">${n.options.map(o => `<button class="opt${o.id === chosen ? ' on' : ''}" data-a="chooseOption" data-i="${ei}" data-o="${o.id}"><b>${esc(o.label)}</b><span>${o.w ? `${round(o.w, 2)} kg × ${o.reps[0]}` : `${o.reps[0]} ${sec ? 's' : 'reps'}`}</span></button>`).join('')}</div>` : '';
   const allDone = e.sets.length && e.sets.every(s => s.done);
   const linked = e.superset && ei < state.active.exercises.length - 1;
   return `<article data-flip data-key="ex-${esc(e.id || ei)}" class="ex${allDone ? ' ex-done' : ''}${linked ? ' ex-linked' : ''}" id="ex-${ei}">
@@ -376,8 +380,8 @@ function exerciseBlock(e, ei) {
     ${last ? `<p class="ex-last"><span>Last time</span> <b>${esc(lastTimeText(last.sets, e.unit))}</b> <em>${daysAgo(last.date)}</em></p>` : ''}
     <p class="ex-next"><b>${esc(n.headline)}.</b> ${esc(n.why)}${n.stalled ? ' <em>Stalled for 4 sessions. A swap may help.</em>' : ''}</p>
     ${options}
-    <table class="sets"><thead><tr><th>Set</th><th>Last</th><th>kg</th><th>${e.unit === 'sec' ? 'Sec' : 'Reps'}</th>${showRir ? '<th>RIR</th>' : ''}<th></th></tr></thead><tbody>${rows}</tbody></table>
-    <div class="ex-foot"><button class="link" data-a="addSet" data-i="${ei}">${i('plus')} Add set</button>${e.sets.length ? `<button class="link" data-a="dropSet" data-i="${ei}">Remove set</button>` : ''}${e.note ? `<span class="ex-note">${esc(e.note)}</span>` : ''}</div>
+    <table class="sets${kg ? '' : ' no-kg'}"><thead><tr><th>Set</th><th>Last</th>${kg ? '<th>kg</th>' : ''}<th>${sec ? 'Sec' : 'Reps'}</th>${showRir ? '<th>RIR</th>' : ''}<th></th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="ex-foot"><button class="link" data-a="addSet" data-i="${ei}">${i('plus')} Add set</button>${e.sets.length ? `<button class="link" data-a="dropSet" data-i="${ei}">Remove set</button>` : ''}${isBodyweight(e) && !e.sets.some(s => Number(s.w) > 0) ? `<button class="link" data-a="toggleLoad" data-i="${ei}">${e.loaded ? 'Bodyweight only' : 'Add weight'}</button>` : ''}${e.note ? `<span class="ex-note">${esc(e.note)}</span>` : ''}</div>
   </article>`;
 }
 

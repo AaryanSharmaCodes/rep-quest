@@ -365,7 +365,7 @@ function suggestNext(pe, history, start = null) {
   }
   const opt = { ...pick('rep'), reps: unit === 'sec' ? same.map(r => r + 5) : plusOne };
   const firstBelow = same.findIndex(r => r < hi);
-  return result('rep', opt, bodyweight ? `Beat last time` : 'Add a rep', firstBelow >= 0 ? `Aim for ${plusOne.join(', ')} at ${w ? w + ' kg' : 'bodyweight'}. Weight goes up when every set hits ${hi}.` : `Top of the range on every set you did. Add the missing set.`);
+  return result('rep', opt, bodyweight ? `Beat last time` : 'Add a rep', firstBelow >= 0 ? (bodyweight ? `Aim for ${plusOne.join(', ')}${unit === 'sec' ? ' s' : ''}. When every set hits ${hi}, move to a harder version.` : `Aim for ${plusOne.join(', ')} at ${w} kg. Weight goes up when every set hits ${hi}.`) : `Top of the range on every set you did. Add the missing set.`);
 }
 
 // Warm-up ramp for heavy compounds, based on the first working weight.

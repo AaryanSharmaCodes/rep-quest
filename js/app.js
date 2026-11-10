@@ -816,6 +816,12 @@ const A = {
     commit();
   },
   endDeload() { state.deloadUntil = null; commit(); },
+  toggleLoad(d) {
+    const e = state.active.exercises[d.i];
+    e.loaded = !e.loaded;
+    if (!e.loaded) e.sets.forEach(s => { if (!s.done) s.w = ''; });
+    haptic(); commit();
+  },
   toggleSet(d) {
     const e = state.active.exercises[d.i], s = e.sets[d.j];
     if (s.done) { s.done = false; commit(); return; }
