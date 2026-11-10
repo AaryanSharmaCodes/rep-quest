@@ -2,46 +2,86 @@
 // Talks to the search worker, plus online lookups for anything the bundled database misses.
 const SOURCE_NAMES = { c: 'Typical estimate', i: 'Indian Nutrient Databank', s: 'USDA FNDDS', f: 'USDA Foundation', l: 'USDA SR Legacy', o: 'Open Food Facts', u: 'USDA online', m: 'My food', n: 'IFCT 2017 (NIN)' };
 
+// iOS can kill the worker while the app sits in the background, and nothing tells the page.
+// So every request has a deadline: a silent worker is replaced and the request is sent again.
 const Foods = {
-  worker: null, pending: new Map(), nextId: 1, ready: false, waiting: [],
+  worker: null, pending: new Map(), nextId: 1, ready: false, waiting: [], gen: 0, revives: 0, bootTimer: null,
   // Nothing may wait forever on a worker that died, and the next search gets a fresh try.
   fail() {
+    this.stop();
+    ui.foodDb = { ...ui.foodDb, failed: true };
+    this.waiting.splice(0).forEach(w => w.resolve({ results: [] }));
+    this.pending.forEach(p => p.resolve({ results: [] }));
+    this.pending.clear();
+    onFoodProgress();
+  },
+  stop() {
+    clearTimeout(this.bootTimer);
     this.worker?.terminate();
     this.worker = null;
     this.ready = false;
-    ui.foodDb = { ...ui.foodDb, failed: true };
-    this.waiting.splice(0).forEach(w => w.resolve({ results: [] }));
-    this.pending.forEach(resolve => resolve({ results: [] }));
+    this.gen++;
+  },
+  // Start a fresh worker and resend whatever was still waiting for an answer.
+  revive() {
+    if (this.revives >= 3) { this.fail(); return; }
+    this.revives++;
+    const unanswered = [...this.pending.values()];
     this.pending.clear();
-    onFoodProgress();
+    this.stop();
+    this.start();
+    unanswered.forEach(p => this.queue(p));
   },
   start() {
     if (this.worker) return;
     try {
       this.worker = new Worker('food-worker.js');
     } catch (e) { return; }
+    const gen = this.gen;
+    // The first file is about 2 MB, so a worker that hasn't said ready after 25 s is stuck.
+    clearTimeout(this.bootTimer);
+    this.bootTimer = setTimeout(() => { if (gen === this.gen && !this.ready) this.revive(); }, 25000);
     this.worker.onmessage = ({ data }) => {
-      if (data.type === 'ready') { this.ready = true; this.waiting.splice(0).forEach(w => w.go()); }
+      if (gen !== this.gen) return;
+      if (data.type === 'ready') { clearTimeout(this.bootTimer); this.ready = true; this.waiting.splice(0).forEach(p => this.post(p)); }
       if (data.type === 'progress') { ui.foodDb = { loaded: data.loaded, total: data.total, done: data.done }; onFoodProgress(); if (data.done) backfillMicros(); }
       if (data.type === 'partial') { ui.foodDb = { ...ui.foodDb, partial: true }; onFoodProgress(); }
-      if (data.type === 'results' || data.type === 'barcode' || data.type === 'lookup') {
-        const cb = this.pending.get(data.id);
-        if (cb) { this.pending.delete(data.id); cb(data); }
+      if (data.type === 'results' || data.type === 'barcode' || data.type === 'lookup' || data.type === 'pong') {
+        const p = this.pending.get(data.id);
+        if (p) { this.pending.delete(data.id); clearTimeout(p.timer); this.revives = 0; p.resolve(data); }
       }
       if (data.type === 'error') this.fail();
     };
-    this.worker.onerror = () => this.fail();
+    this.worker.onerror = () => { if (gen === this.gen) this.revive(); };
+    this.worker.onmessageerror = () => { if (gen === this.gen) this.revive(); };
   },
-  send(msg) {
-    return new Promise(resolve => {
-      const go = () => { const id = this.nextId++; this.pending.set(id, resolve); this.worker.postMessage({ ...msg, id }); };
-      this.start();
-      if (!this.worker) { resolve({ results: [] }); return; }
-      if (this.ready) go(); else this.waiting.push({ go, resolve });
-    });
+  post(p) {
+    const id = this.nextId++, gen = this.gen;
+    this.pending.set(id, p);
+    clearTimeout(p.timer);
+    p.timer = setTimeout(() => {
+      if (!this.pending.has(id) || gen !== this.gen) return;
+      if (++p.tries > 2) { this.pending.delete(id); p.resolve({ results: [] }); return; }
+      this.revive();
+    }, p.msg.type === 'lookup' ? 20000 : 6000);
+    try { this.worker.postMessage({ ...p.msg, id }); } catch (e) { this.revive(); }
   },
+  queue(p) {
+    this.start();
+    if (!this.worker) { p.resolve({ results: [] }); return; }
+    if (this.ready) this.post(p); else this.waiting.push(p);
+  },
+  send(msg) { return new Promise(resolve => this.queue({ msg, resolve, tries: 0 })); },
   search(q) { return this.send({ type: 'search', q }); },
   barcode(code) { return this.send({ type: 'barcode', code }); },
+  // Coming back to the app: make sure the worker is still alive before the next search needs it.
+  check() {
+    if (!this.worker || !this.ready) return;
+    const gen = this.gen;
+    let answered = false;
+    this.send({ type: 'ping' }).then(() => { answered = true; });
+    setTimeout(() => { if (!answered && gen === this.gen && this.worker) this.revive(); }, 3000);
+  },
 };
 
 const withTimeout = (url, ms = 12000) => {

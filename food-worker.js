@@ -105,15 +105,18 @@ function run(tokens, limit) {
         const tab2 = low.indexOf('\t', tab1 + 1);
         if (i >= tab2) { i = end + 1; continue; } // matched a serving label, not the food
         done.add(start);
+        // Look only inside this food's name and brand. Searching the whole file from here made
+        // two-word searches crawl through megabytes for every line that matched the first word.
+        const seg = low.slice(start, tab2), nameEnd = tab1 - start;
 
         let inName = 0, all = true, exactWords = 0;
         for (let g = 0; g < groups.length && all; g++) {
           let found = -1;
           for (const form of groups[g]) {
-            found = wordAt(low, form, start, tab2);
+            found = wordAt(seg, form, 0, seg.length);
             if (found >= 0) {
-              if (found < tab1) inName++;
-              const after = low.charCodeAt(found + form.length);
+              if (found < nameEnd) inName++;
+              const after = seg.charCodeAt(found + form.length);
               if (!isWord(after)) exactWords++;
               break;
             }
@@ -133,7 +136,7 @@ function run(tokens, limit) {
         score += exactWords * 8;
         const nameStart = low.slice(start, start + phrase.length);
         if (nameStart === phrase) score += 34;
-        else if (wordAt(low, phrase, start, tab1) >= 0) score += 20;
+        else if (wordAt(seg, phrase, 0, nameEnd) >= 0) score += 20;
         else if (forms(tokens[0]).some(f => low.startsWith(f, start))) score += 12;
         score -= Math.min(nameLen, 90) * 0.42;
         score -= (start / size) * 6; // packaged files are sorted most-scanned first
@@ -254,6 +257,7 @@ function lookup(items) {
 }
 
 onmessage = ({ data }) => {
+  if (data.type === 'ping') postMessage({ type: 'pong', id: data.id });
   if (data.type === 'lookup') postMessage({ type: 'lookup', id: data.id, found: lookup(data.items) });
   if (data.type === 'search') postMessage({ type: 'results', id: data.id, ...search(data.q) });
   if (data.type === 'barcode') postMessage({ type: 'barcode', id: data.id, food: byBarcode(data.code) });

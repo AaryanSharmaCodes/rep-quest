@@ -1208,6 +1208,7 @@ document.addEventListener('visibilitychange', () => {
     Cloud.pull();
     if (ui.openedOn !== today()) { ui.openedOn = today(); ui.foodDate = today(); ui.planDay = new Date().getDay(); ui.day = null; ui.dayBack = null; }
     if (state.active) requestWake();
+    Foods.check();
     if (!document.activeElement || document.activeElement === document.body) render();
     swReg?.update().catch(() => {});
     applyUpdate();
