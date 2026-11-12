@@ -184,9 +184,9 @@ function microRow(key, r, opts = {}) {
 }
 // On Today until all of today's supplements are ticked.
 function suppToday() {
-  const taken = suppTaken(today());
-  if (!state.supplements.length || taken.length >= state.supplements.length) return '';
-  return `<section class="block card supp-today"><div class="q-head"><h2>Supplements</h2><button class="link strong" data-a="allSupps" data-k="${today()}">Took all</button></div>
+  const taken = suppTaken(today()), all = taken.length >= state.supplements.length;
+  if (!state.supplements.length) return '';
+  return `<section class="block card supp-today"><div class="q-head"><h2>Supplements</h2>${all ? `<span class="dim sm">All ${state.supplements.length} taken</span>` : `<button class="link strong" data-a="allSupps" data-k="${today()}">Took all</button>`}</div>
     <div class="supp-chips">${state.supplements.map(s => `<button class="supp-chip${taken.includes(s.id) ? ' on' : ''}" data-a="toggleSupp" data-id="${s.id}" data-k="${today()}" aria-pressed="${taken.includes(s.id)}">${taken.includes(s.id) ? i('tick') : ''}${esc(s.name)}</button>`).join('')}</div></section>`;
 }
 function suppCard(k) {
