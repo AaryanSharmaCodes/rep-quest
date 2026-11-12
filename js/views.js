@@ -242,6 +242,8 @@ function viewPastDay(k) {
     <div class="q-head"><h2>Quests</h2><span class="q-count">[${done} / ${quests.length}]</span></div>
     <ul class="quests">${quests.map(q => questCard(q, info[q.id], [])).join('')}</ul>
   </section>
+  ${state.supplements.length ? suppCard(k) : ''}
+  ${waistDay(k)}
   <section class="block"><div class="q-head"><h2>Food</h2><button class="link strong" data-a="dayFood" data-k="${k}">${t.items ? 'Edit food' : 'Add food'}</button></div>
     ${food || '<p class="empty">No food logged on this day.</p>'}</section>
   ${workouts.length ? `<section class="block"><h2>Workout</h2><div class="day-workouts">${train}</div></section>` : ''}`;
@@ -520,6 +522,12 @@ function waistToday() {
   const change = waist.length > 1 ? `, ${signed(round(waistIn(last.v) - waistIn(waist[0].v), 1), 1)} ${waistUnit()} since ${sinceWord(waist[0].date)}` : '';
   return `<section class="block card waist-today"><div class="q-head"><h2>Waist</h2><button class="link strong" data-a="openSheet" data-type="waist">${cur != null ? 'Edit today' : 'Log waist'}</button></div>
     <p class="dim sm">${last ? `${waistText(last.v)} ${whenWord(last.date)}${change}.` : 'Not measured yet. Once a week, in the morning, tape at the belly button.'}</p></section>`;
+}
+// A past day: the waist measured that day, which can still be added or changed.
+function waistDay(k) {
+  const cur = peekDay(k).waist;
+  return `<section class="block card waist-day"><div class="q-head"><h2>Waist</h2><button class="link strong" data-a="openSheet" data-type="waist" data-date="${k}">${cur != null ? 'Edit' : 'Add'}</button></div>
+    <p class="dim sm">${cur != null ? waistText(cur) : 'Not measured on this day.'}</p></section>`;
 }
 function viewProgress() {
   const waist = series('waist', 0);

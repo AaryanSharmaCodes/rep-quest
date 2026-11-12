@@ -29,13 +29,17 @@ function idbPut(key, value) {
     tx.onabort = () => reject(tx.error);
   });
 }
+// Both copies are read and the newer one wins: if one of them stopped saving (a full localStorage,
+// a dropped database), the stale copy must never be loaded over newer data.
 async function readSave() {
+  let fromDb = null, fromLs = null;
   try {
     idb = await openDB();
-    const saved = await idbGet('state');
-    if (saved) return saved;
+    fromDb = await idbGet('state');
   } catch (e) { idb = null; }
-  try { return JSON.parse(localStorage.getItem(DB_NAME)); } catch (e) { return null; }
+  try { fromLs = JSON.parse(localStorage.getItem(DB_NAME)); } catch (e) { fromLs = null; }
+  if (fromDb && fromLs) return (fromLs.editedAt || 0) > (fromDb.editedAt || 0) ? fromLs : fromDb;
+  return fromDb || fromLs;
 }
 async function writeSave() {
   const copy = clone(state);
@@ -53,11 +57,11 @@ async function writeSave() {
   else Cloud.changed();
 }
 let saveTimer = null;
-function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(writeSave, 150); }
+function scheduleSave() { if (state) state.editedAt = Date.now(); clearTimeout(saveTimer); saveTimer = setTimeout(writeSave, 150); }
 function flushSave() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; writeSave(); } }
 
 /* ---------- State ---------- */
-const APP_VERSION = 23; // matches CACHE in sw.js
+const APP_VERSION = 24; // matches CACHE in sw.js
 const THEMES = [
   { id: 'game', name: 'Quest', bar: '#170e33', fx: ['#b78eff', '#dfceff', '#ffffff', '#7f5cff'], shapes: ['star', 'circle'], burst: 1 },
   { id: 'light', name: 'Minimal', bar: '#f7f7f4', fx: ['#17171a', '#8a8a8e', '#c9c9c5'], shapes: ['circle'], burst: 0.6 },
@@ -127,6 +131,17 @@ function migrate(saved) {
       s.dismissed = { ...s.dismissed, creatine: true }; // he already takes it, so no tip suggesting it
       s.suppVersion = SUPPLEMENTS_VERSION;
     }
+    // Repair (13 Nov 2026): no check-in has changed the plan yet, so every day from the plan's start is 2,825 kcal / 160 g.
+    // Something later logged an older 2,500 target from Thursday 12 Nov on. Drop changes after the plan and restore it.
+    if (saved.checkIn && !saved.targetsFixed && !(s.checkIn.done || []).length && s.onboarded) {
+      const log = (s.targetLog || []).slice().sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+      const plan = log.filter(x => /start of weekly check-ins/.test(x.reason || '')).pop();
+      if (plan) {
+        s.targetLog = log.filter(x => x.date <= plan.date && (x.date < plan.date || x === plan));
+        s.targets = { ...s.targets, kcal: plan.kcal, protein: plan.protein, carbs: plan.carbs, fat: plan.fat, dayProtein: { ...s.targets.dayProtein, 2: 120 } };
+      }
+      s.targetsFixed = true;
+    }
     // The first check-in plan (9 Nov 2026): recomp at maintenance, 2,825 kcal and 160 g protein, 120 g on Tuesdays.
     if (!saved.checkIn) {
       const t = s.targets, fat = t.fat || 70;
@@ -138,6 +153,7 @@ function migrate(saved) {
       if (!s.targetLog.length && s.onboarded) s.targetLog.push({ date: s.profile.startDate || addDays(today(), -14), kcal: t.kcal, protein: t.protein, carbs: t.carbs, fat: t.fat, reason: 'Starting target' });
       if (s.onboarded) s.targetLog.push({ date: today(), kcal: s.targets.kcal, protein: 160, carbs: s.targets.carbs, fat, reason: 'Coach: start of weekly check-ins' });
       s.kcalChangedOn = today();
+      s.targetsFixed = true;
     }
     return s;
   }
@@ -216,9 +232,11 @@ function dayTotals(k) {
   Object.values(peekDay(k).meals || {}).forEach(list => list.forEach(e => { t.kcal += e.kcal; t.p += e.p; t.c += e.c; t.f += e.f; t.items++; }));
   return t;
 }
+const sortedTargetLog = () => state.targetLog.map((x, n) => ({ x, n })).sort((a, b) => (a.x.date < b.x.date ? -1 : a.x.date > b.x.date ? 1 : a.n - b.n)).map(o => o.x);
 function targetsOn(k) {
+  // The newest change on or before this day wins, whatever order the log ended up in.
   let found = null;
-  state.targetLog.forEach(x => { if (x.date <= k) found = x; });
+  state.targetLog.forEach(x => { if (x.date <= k && (!found || x.date >= found.date)) found = x; });
   const base = found ? { ...state.targets, ...found } : state.targets;
   const dayP = state.targets.dayProtein?.[parseKey(k).getDay()];
   return dayP != null ? { ...base, protein: dayP } : base;

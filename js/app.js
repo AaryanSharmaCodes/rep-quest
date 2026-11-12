@@ -604,7 +604,12 @@ const A = {
   saveWaist() {
     const w = waistToCm(num(v('wa-val')));
     if (!waistValid(w)) { toast(`Enter your waist in ${waistUnit() === 'in' ? 'inches' : 'cm'}`); return; }
-    getDay(today()).waist = w;
+    getDay(ui.sheet.date || today()).waist = w;
+    haptic();
+    closeSheet();
+  },
+  clearWaist() {
+    delete getDay(ui.sheet.date || today()).waist;
     haptic();
     closeSheet();
   },
@@ -1054,6 +1059,15 @@ const A = {
     state.targets = { ...t, ...next };
     if (before !== `${next.kcal}/${next.protein}/${next.carbs}/${next.fat}`) logTargets('Edited by you');
     closeSheet();
+  },
+  dropTargetChange(d) {
+    const log = sortedTargetLog(), gone = log[Number(d.n)];
+    if (!gone || log.length < 2 || gone.date !== d.date) return;
+    if (!confirm(`Remove the ${fmt(gone.kcal)} kcal target from ${niceDate(gone.date)}?`)) return;
+    state.targetLog = state.targetLog.filter(x => x !== gone);
+    const latest = sortedTargetLog().pop();
+    if (gone === log[log.length - 1]) state.targets = { ...state.targets, kcal: latest.kcal, protein: latest.protein, carbs: latest.carbs, fat: latest.fat };
+    haptic(); commit();
   },
   goalMode(d) { ui.sheet.mode = d.v; render(); },
   saveGoal(d) {

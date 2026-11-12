@@ -16,15 +16,17 @@ const SHEETS = {
   checkIn() { return checkInSheet(); },
   micro(s) { return microSheet(s); },
   waist(s) {
-    const cur = peekDay(today()).waist, last = latestMetric('waist');
+    const date = s.date || today();
+    const cur = peekDay(date).waist, last = latestMetric('waist', date);
     const past = series('waist', 0).slice().reverse().slice(0, 6);
     const shown = s.draft ?? cur ?? last?.v, unit = waistUnit();
-    return `${sheetHead(cur != null ? 'Edit waist' : 'Log waist', 'Morning, relaxed, tape level at the belly button')}
+    return `${sheetHead(cur != null ? 'Edit waist' : 'Log waist', date === today() ? 'Morning, relaxed, tape level at the belly button' : niceDate(date))}
       <div class="seg wa-unit">${[['cm', 'Centimetres'], ['in', 'Inches']].map(([u, l]) => `<button class="${unit === u ? 'on' : ''}" data-a="waistUnit" data-v="${u}">${l}</button>`).join('')}</div>
       <div class="big-input"><button class="step" data-a="bump" data-t="wa-val" data-by="-0.5" aria-label="Down 0.5">−</button>
         <input id="wa-val" inputmode="decimal" value="${esc(shown != null ? waistIn(shown) : '')}" aria-label="Waist in ${unit === 'in' ? 'inches' : 'cm'}"><button class="step" data-a="bump" data-t="wa-val" data-by="0.5" aria-label="Up 0.5">+</button></div>
       <p class="center dim">${unit === 'in' ? 'inches' : 'cm'}</p>
       <button class="btn solid wide" data-a="saveWaist">${cur != null ? 'Update waist' : 'Save waist'}</button>
+      ${cur != null && date !== today() ? '<button class="link danger block-link" data-a="clearWaist">Remove this measurement</button>' : ''}
       ${past.length ? `<h3 class="sh-sub">Past measurements</h3><ul class="weigh-list">${past.map(p => `<li><div class="row"><span>${esc(niceDate(p.date))}</span><span class="dim">${waistText(p.v)}</span></div></li>`).join('')}</ul>` : ''}`;
   },
   weight(s) {
@@ -308,7 +310,8 @@ const SHEETS = {
         <button class="link" type="button" data-a="balanceCarbs">Set carbs to fit the calories</button>
         ${pr ? `<p class="sm dim">At ${round(w, 1)} kg, research suggests ${pr[0]} to ${pr[1]} g protein ${refLinks(['morton18', 'iraki19'])} and ${fr[0]} to ${fr[1]} g fat ${refLinks(['iraki19'])}.</p>` : ''}
         <div class="two">${field('Sleep, h', 't-sleep', t.sleep, 'inputmode="decimal"')}${field('Water, L', 't-water', t.water, 'inputmode="decimal"')}</div>
-        <button class="btn solid wide" data-a="saveTargets">Save targets</button></div>`;
+        <button class="btn solid wide" data-a="saveTargets">Save targets</button></div>
+      ${targetHistory()}`;
   },
   goal(s) {
     const mode = s.mode || state.goal.mode;
@@ -406,6 +409,13 @@ function foodSuggestions(s) {
   const staples = ['Chicken breast, cooked', 'Egg, whole', 'Whey protein', 'Roti / chapati / phulka, no ghee', 'White rice / chawal, cooked', 'Dal, home-cooked (toor / arhar)', 'Paneer', 'Banana'];
   return `${fits.length ? `<h3 class="sh-sub">Fits what's left: ${fmt(Math.max(left.kcal, 0))} kcal, ${Math.max(Math.round(left.p), 0)} g protein</h3><ul class="food-list">${fits.map(f => foodRow(f)).join('')}</ul>` : ''}
     <h3 class="sh-sub">Quick search</h3><div class="pills">${staples.map(x => `<button class="pill" data-a="foodQuery" data-q="${esc(x.split(/[,/(]/)[0].trim())}">${esc(x.split(/[,/(]/)[0].trim())}</button>`).join('')}</div>`;
+}
+// Every calorie change with its date and reason, newest first. Each day is judged by the change in force that day.
+function targetHistory() {
+  const log = sortedTargetLog().slice().reverse();
+  if (!log.length) return '';
+  return `<h3 class="sh-sub">Target changes</h3><ul class="rows t-log">${log.map((x, n) => `<li><div class="row"><span>${esc(niceDate(x.date))}<em>${esc(x.reason || 'Edited')}</em></span><span class="dim">${fmt(x.kcal)} kcal, ${x.protein} g</span>${log.length > 1 ? `<button class="ic-btn" data-a="dropTargetChange" data-date="${x.date}" data-n="${log.length - 1 - n}" aria-label="Remove this change">${i('close')}</button>` : ''}</div></li>`).join('')}</ul>
+    <p class="sm dim">Each day uses the change in force on that day. Remove one that shouldn't be there.</p>`;
 }
 function libOrCustom(name) {
   return libEntry(name) || (state.customExercises || []).find(x => x.name === name) || null;

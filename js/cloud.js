@@ -145,10 +145,11 @@ const Cloud = (() => {
       });
       return out;
     }
-    // Settings and plan: a phone that hasn't been set up takes the account's, otherwise the newest wins,
-    // and the very first sign-in keeps what's on this phone. A running workout is never dropped.
+    // Settings, targets and plan: a phone that hasn't been set up takes the account's, the very first sign-in
+    // keeps what's on this phone, and otherwise the copy edited most recently wins. Before, the other copy
+    // always won, so an old browser tab could roll targets back. A running workout is never dropped.
     const firstLink = !sync.chunks.meta;
-    const chosen = !local.onboarded || !firstLink ? remote : local;
+    const chosen = !local.onboarded ? remote : firstLink ? local : (remote.editedAt || 0) > (local.editedAt || 0) ? remote : local;
     return { ...chosen, active: local.active || chosen.active || null };
   }
 
