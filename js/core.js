@@ -61,7 +61,7 @@ function scheduleSave() { if (state) state.editedAt = Date.now(); clearTimeout(s
 function flushSave() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; writeSave(); } }
 
 /* ---------- State ---------- */
-const APP_VERSION = 25; // matches CACHE in sw.js
+const APP_VERSION = 26; // matches CACHE in sw.js
 const THEMES = [
   { id: 'game', name: 'Quest', bar: '#170e33', fx: ['#b78eff', '#dfceff', '#ffffff', '#7f5cff'], shapes: ['star', 'circle'], burst: 1 },
   { id: 'light', name: 'Minimal', bar: '#f7f7f4', fx: ['#17171a', '#8a8a8e', '#c9c9c5'], shapes: ['circle'], burst: 0.6 },
@@ -70,12 +70,14 @@ const THEMES = [
 ];
 // His daily supplements, from the labels (per serving).
 const DEFAULT_SUPPLEMENTS = [
-  { id: 'fishoil', name: 'Fish oil', detail: 'Citrus lemon, 2 softgels', kcal: 29.3, n: { o3: 1500, va: 840, vd: 15, ve: 10 }, extra: 'EPA 900 mg, DHA 600 mg, other omega-3 90 mg' },
-  { id: 'magnesium', name: 'Magnesium glycinate', detail: 'Maginova, 2 tablets', kcal: 0.5, n: { mg: 440 }, extra: '2,000 mg magnesium glycinate = 440 mg magnesium' },
+  { id: 'fishoil', name: 'Fish oil', detail: 'Citrus lemon, 1 softgel', kcal: 14.7, n: { o3: 750, va: 420, vd: 7.5, ve: 5 }, extra: 'EPA 450 mg, DHA 300 mg, other omega-3 45 mg' },
+  { id: 'magnesium', name: 'Magnesium glycinate', detail: 'Maginova, 1 tablet', kcal: 0.25, n: { mg: 220 }, extra: '1,000 mg magnesium glycinate = 220 mg magnesium' },
   { id: 'limcee', name: 'Limcee vitamin C', detail: '1 chewable tablet', kcal: 0, n: { vc: 500 }, extra: 'Vitamin C 500 mg' },
 ];
 // Raised whenever the defaults change, so saved lists pick up additions once.
-const SUPPLEMENTS_VERSION = 4;
+const SUPPLEMENTS_VERSION = 5;
+// He takes 1 fish oil and 1 magnesium a day, not the 2-unit serving on the labels (fixed 15 Nov 2026).
+const RESET_SUPPLEMENTS = { 5: ['fishoil', 'magnesium'] };
 // Only supplements that add vitamins, minerals or calories belong here (removed 11 Nov 2026).
 const DROPPED_SUPPLEMENTS = ['glutathione', 'creatine'];
 function defaultState() {
@@ -122,6 +124,10 @@ function migrate(saved) {
     // Supplements added to the defaults after a save was made join its list once.
     if ((saved.suppVersion || 1) < SUPPLEMENTS_VERSION) {
       DEFAULT_SUPPLEMENTS.forEach(x => { if (!s.supplements.some(y => y.id === x.id)) s.supplements.push(clone(x)); });
+      Object.entries(RESET_SUPPLEMENTS).forEach(([v, ids]) => {
+        if ((saved.suppVersion || 1) >= Number(v)) return;
+        s.supplements = s.supplements.map(x => (ids.includes(x.id) ? clone(DEFAULT_SUPPLEMENTS.find(y => y.id === x.id) || x) : x));
+      });
       s.supplements = s.supplements.filter(x => !DROPPED_SUPPLEMENTS.includes(x.id));
       Object.values(s.days).forEach(d => {
         if (!d.supps) return;
@@ -155,6 +161,7 @@ function migrate(saved) {
       s.kcalChangedOn = today();
       s.targetsFixed = true;
     }
+    applyCoach(s);
     return s;
   }
   const s = defaultState();
@@ -261,10 +268,14 @@ function series(field, days = 90) {
 const latestWeight = () => latestMetric('weight')?.v ?? null;
 // What to do next for an exercise. Beginners get a starting weight the first time they meet one.
 function nextFor(e, history) {
-  if (history.length || state.profile.level !== 'beginner') return suggestNext(e, history);
-  const lib = libEntry(e.name);
-  const w = startingWeight(lib, latestWeight(), state.profile.sex);
-  return suggestNext(e, history, w ? { w, each: lib.equip === 'dumbbell' && !ONE_DUMBBELL.has(lib.name) } : null);
+  let n;
+  if (history.length || state.profile.level !== 'beginner') n = suggestNext(e, history);
+  else {
+    const lib = libEntry(e.name);
+    const w = startingWeight(lib, latestWeight(), state.profile.sex);
+    n = suggestNext(e, history, w ? { w, each: lib.equip === 'dumbbell' && !ONE_DUMBBELL.has(lib.name) } : null);
+  }
+  return withCoachTarget(e.name, n);
 }
 
 // Records a new calorie target. Only calorie and macro changes restart the coach's measuring window.

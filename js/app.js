@@ -187,7 +187,7 @@ async function onlineSearch() {
 function rowsToActive(rows, deload) {
   return rows.map(e => {
     const count = deload ? Math.max(1, Math.ceil(e.sets / 2)) : e.sets;
-    return { ...clone(e), planRow: e.id, chosen: deload ? 'lighter' : undefined, sets: Array.from({ length: count }, () => ({ w: '', r: '', done: false })) };
+    return { ...clone(withCoachRange(e)), planRow: e.id, chosen: deload ? 'lighter' : undefined, sets: Array.from({ length: count }, () => ({ w: '', r: '', done: false })) };
   });
 }
 // A date in the past means logging a session after the fact. It sits at midday on that day, so history stays in order.
@@ -280,14 +280,14 @@ async function rowFromName(name, keep = {}) {
   const lib = libOrCustom(name);
   if (lib) {
     const r = planRow(name, keep.sets ?? 3, keep.lo ?? lib.lo, keep.hi ?? lib.hi);
-    return { ...r, p: lib.p, s: lib.s || [], kind: lib.kind, unit: lib.unit || 'reps', inc: lib.inc ?? 2.5, rest: lib.rest ?? 90 };
+    return withCoachRange({ ...r, p: lib.p, s: lib.s || [], kind: lib.kind, unit: lib.unit || 'reps', inc: lib.inc ?? 2.5, rest: lib.rest ?? 90 });
   }
   const db = await loadExerciseDb();
   const x = db.find(e => e.n === name);
   const kind = x?.c ? 'compound' : 'isolation';
   const equip = x?.e || 'other';
   const inc = /dumbbell/.test(equip) ? 2 : /body/.test(equip) ? 0 : /machine/.test(equip) ? 5 : 2.5;
-  return { ...planRow(name, keep.sets ?? 3, keep.lo ?? (kind === 'compound' ? 8 : 10), keep.hi ?? (kind === 'compound' ? 12 : 15)), p: x?.p || 'abs', s: x?.s || [], kind, inc, rest: kind === 'compound' ? 150 : 90 };
+  return withCoachRange({ ...planRow(name, keep.sets ?? 3, keep.lo ?? (kind === 'compound' ? 8 : 10), keep.hi ?? (kind === 'compound' ? 12 : 15)), p: x?.p || 'abs', s: x?.s || [], kind, inc, rest: kind === 'compound' ? 150 : 90 });
 }
 
 /* ---------- Rest timer and clocks ---------- */
@@ -607,6 +607,12 @@ const A = {
     getDay(ui.sheet.date || today()).waist = w;
     haptic();
     closeSheet();
+  },
+  setSleep(d) {
+    const day = getDay(d.k || today()), h = Number(d.v);
+    if (day.sleep === h) delete day.sleep; else day.sleep = h;
+    haptic();
+    commit();
   },
   clearWaist() {
     delete getDay(ui.sheet.date || today()).waist;

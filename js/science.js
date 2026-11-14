@@ -315,9 +315,14 @@ function suggestNext(pe, history, start = null) {
   if (!sets.length) return { kind: 'first', w: null, reps: Array(planned).fill(hi), headline: 'Repeat last session', why: '', options: [], stalled: false };
   const counts = {};
   sets.forEach(s => { counts[s.w] = (counts[s.w] || 0) + 1; });
-  const w = Number(Object.keys(counts).sort((a, b) => counts[b] - counts[a] || b - a)[0]);
+  // Sets at different weights are usually a ramp (40, 50, 55 kg). Work from the heaviest weight that still
+  // reached the rep range, and only from the reps done at that weight: reps from lighter sets must never be
+  // carried over to a heavier one (40 × 12, 50 × 12, 55 × 6 used to give 55 kg × 12).
+  const ramp = Object.keys(counts).length > 1;
+  const inRange = sets.filter(s => s.r >= lo).map(s => s.w);
+  const w = ramp && inRange.length ? Math.max(...inRange) : Number(Object.keys(counts).sort((a, b) => counts[b] - counts[a] || b - a)[0]);
   const atW = sets.filter(s => s.w === w);
-  const repsLast = sets.map(s => s.r);
+  const repsLast = ramp ? atW.map(s => s.r) : sets.map(s => s.r);
   const bodyweight = !w || inc === 0;
   const allTop = atW.length >= Math.min(planned, sets.length) && atW.every(s => s.r >= hi) && atW.length >= planned;
   const heavier = fixW(w + inc);
