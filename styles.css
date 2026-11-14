@@ -782,3 +782,9 @@ html[data-theme=arcade] .fx-ring { border-radius: 0; }
 .coach-rules { list-style: disc; margin: 8px 0 0; padding-left: 20px; display: grid; gap: 6px; font-size: 14px; line-height: 1.45; color: var(--dim); }
 .coach-rules li::marker { color: var(--accent-hi); }
 .sleep-seg button { min-width: 0; padding: 0 2px; }
+.sl-label { margin: 10px 0 0; font-size: 13px; color: var(--dim); font-weight: 500; }
+.sleep-card .seg { margin-top: 6px; }
+.nap-add, .nap-list { margin: 6px 0 4px; }
+.nap-list .pill { border-color: var(--accent-hi); color: var(--accent-hi); }
+.nap-add { display: grid; grid-template-columns: repeat(5, 1fr); }
+.nap-add .pill { justify-content: center; padding: 0 4px; font-size: 13px; }

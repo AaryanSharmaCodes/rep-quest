@@ -54,7 +54,7 @@ const SHEETS = {
     return `${sheetHead('Daily log')}
       <div class="datebar slim"><button class="ic-btn" data-a="logDay" data-n="-1" aria-label="Previous day">${i('back')}</button><b>${niceDate(date)}</b>${date < today() ? `<button class="ic-btn" data-a="logDay" data-n="1" aria-label="Next day">${i('next')}</button>` : '<span class="ic-btn"></span>'}</div>
       <div class="form">
-        <div class="two">${field(`Sleep, h`, 'l-sleep', d.sleep, 'inputmode="decimal"')}${field('Water, L', 'l-water', d.water, 'inputmode="decimal"')}</div>
+        <div class="two">${field(`Night sleep, h`, 'l-sleep', d.sleep, 'inputmode="decimal"')}${field('Water, L', 'l-water', d.water, 'inputmode="decimal"')}</div>
         ${field('Cardio, minutes', 'l-cardio', d.cardio, 'inputmode="numeric"')}
         ${field(`Waist, ${waistUnit()}`, 'l-waist', d.waist != null ? waistIn(d.waist) : null, 'inputmode="decimal"')}
         <label>Note<textarea id="l-note" rows="2">${esc(d.note || '')}</textarea></label>

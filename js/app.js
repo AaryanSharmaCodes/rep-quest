@@ -614,6 +614,20 @@ const A = {
     haptic();
     commit();
   },
+  addNap(d) {
+    const day = getDay(d.k || today());
+    day.naps = [...(day.naps || []), Number(d.v)];
+    haptic();
+    toast(`Nap added. ${sleepTotal(d.k || today())} h of sleep for the day.`);
+    commit();
+  },
+  dropNap(d) {
+    const day = getDay(d.k || today());
+    day.naps = (day.naps || []).filter((_, n) => n !== Number(d.i));
+    if (!day.naps.length) delete day.naps;
+    haptic();
+    commit();
+  },
   clearWaist() {
     delete getDay(ui.sheet.date || today()).waist;
     haptic();

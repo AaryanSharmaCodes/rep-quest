@@ -197,10 +197,12 @@ function checkInReport(s = checkInStatus()) {
   lines.push('', ...microReport(s.from, s.to));
 
   if (state.coach?.others) lines.push(`Also taken daily, not in the numbers above (no vitamins or minerals): ${state.coach.others}`);
-  const sleep = now.days.map(k => peekDay(k).sleep).filter(x => x != null), cardio = now.days.map(k => peekDay(k).cardio).filter(x => x != null);
+  const sleep = now.days.map(sleepTotal).filter(x => x != null), cardio = now.days.map(k => peekDay(k).cardio).filter(x => x != null);
   const water = now.days.map(k => peekDay(k).water).filter(x => x != null);
-  lines.push('', 'RECOVERY (sleep is the night before each date)');
-  lines.push(sleep.length ? `Sleep ${round(avg(sleep), 1)} h a night (${sleep.length} of ${now.days.length} nights logged): ${now.days.map(k => `${dayLabel(k)} ${peekDay(k).sleep ?? '–'}`).join(' | ')}` : 'Sleep not logged.');
+  lines.push('', 'RECOVERY (each date = the night before it + naps that day)');
+  const sleepDay = k => { const t = sleepTotal(k), n = sleepNaps(k); return t == null ? '–' : n.length ? `${t} (night ${peekDay(k).sleep ?? '–'} + naps ${n.join(' + ')})` : `${t}`; };
+  const napDays = now.days.filter(k => sleepNaps(k).length).length;
+  lines.push(sleep.length ? `Sleep ${round(avg(sleep), 1)} h a day including naps (${sleep.length} of ${now.days.length} days logged, naps on ${napDays}): ${now.days.map(k => `${dayLabel(k)} ${sleepDay(k)}`).join(' | ')}` : 'Sleep not logged.');
   lines.push(cardio.length ? `Cardio ${fmt(sum(cardio))} minutes in total.` : 'No cardio logged.');
   if (water.length) lines.push(`Water ${round(avg(water), 1)} L a day (${water.length} days logged).`);
   const changes = sortedTargetLog().filter(x => x.date >= addDays(s.from, -7) && x.date <= s.to);

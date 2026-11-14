@@ -61,7 +61,7 @@ function scheduleSave() { if (state) state.editedAt = Date.now(); clearTimeout(s
 function flushSave() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; writeSave(); } }
 
 /* ---------- State ---------- */
-const APP_VERSION = 26; // matches CACHE in sw.js
+const APP_VERSION = 27; // matches CACHE in sw.js
 const THEMES = [
   { id: 'game', name: 'Quest', bar: '#170e33', fx: ['#b78eff', '#dfceff', '#ffffff', '#7f5cff'], shapes: ['star', 'circle'], burst: 1 },
   { id: 'light', name: 'Minimal', bar: '#f7f7f4', fx: ['#17171a', '#8a8a8e', '#c9c9c5'], shapes: ['circle'], burst: 0.6 },
@@ -265,6 +265,9 @@ function series(field, days = 90) {
   const from = days ? addDays(today(), -days) : '0000';
   return Object.keys(state.days).filter(k => k >= from && state.days[k][field] != null).sort().map(k => ({ date: k, v: state.days[k][field] }));
 }
+// Night sleep is one tap; naps are added on top, as many as he takes. Both count toward the day.
+const sleepNaps = k => peekDay(k).naps || [];
+const sleepTotal = k => { const d = peekDay(k), naps = sleepNaps(k); return d.sleep == null && !naps.length ? null : round((d.sleep || 0) + sum(naps), 2); };
 const latestWeight = () => latestMetric('weight')?.v ?? null;
 // What to do next for an exercise. Beginners get a starting weight the first time they meet one.
 function nextFor(e, history) {

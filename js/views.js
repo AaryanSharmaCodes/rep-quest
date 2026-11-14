@@ -100,7 +100,7 @@ function adviceList() {
   } else if (stalledToday) {
     add({ id: `stall-${stalledToday}`, title: `${stalledToday} has stalled`, body: 'No progress across 4 sessions. Try a small jump, an extra set, or swap it for a close alternative during your workout.', action: ['See history', 'sheet', { type: 'lift', name: stalledToday }], refs: ['plotkin22'] });
   }
-  const sleep = series('sleep', 7).map(x => x.v);
+  const sleep = datesIn(addDays(today(), -6), today()).map(sleepTotal).filter(x => x != null);
   if (sleep.length >= 4 && avg(sleep) < 7) add({ id: 'sleep', title: `Sleep is averaging ${round(avg(sleep), 1)} h`, body: `Aim for ${tg.sleep} to 9 hours. Recovery shows up in your lifts before anywhere else.` });
 
   if (!state.dismissed.creatine) add({ id: 'creatine', title: 'Creatine is the best-supported supplement', body: '3 to 5 g every day, including rest days. You can log it as a food to remember it.', refs: ['kreider17'], once: true });
@@ -526,15 +526,21 @@ function waistToday() {
   return `<section class="block card waist-today"><div class="q-head"><h2>Waist</h2><button class="link strong" data-a="openSheet" data-type="waist">${cur != null ? 'Edit today' : 'Log waist'}</button></div>
     <p class="dim sm">${last ? `${waistText(last.v)} ${whenWord(last.date)}${change}.` : 'Not measured yet. Once a week, in the morning, tape at the belly button.'}</p></section>`;
 }
-// Last night's sleep, stored on the morning it ends. One tap sets it; tapping it again clears it.
-const SLEEP_CHOICES = [5, 6, 6.5, 7, 7.5, 8, 9];
+// Sleep for a day: last night (one tap) plus any naps during the day, each added separately.
+const SLEEP_CHOICES = [4, 5, 6, 6.5, 7, 7.5, 8, 9];
+const NAP_CHOICES = [[0.5, '30 min'], [1, '1 h'], [1.5, '1.5 h'], [2, '2 h'], [3, '3 h']];
+const hrs = h => (h < 1 ? `${Math.round(h * 60)} min` : `${round(h, 2)} h`);
 function sleepCard(k) {
-  const cur = peekDay(k).sleep, isToday = k === today();
-  const week = datesIn(addDays(k, -6), k).map(x => peekDay(x).sleep).filter(x => x != null);
-  const note = cur != null && !SLEEP_CHOICES.includes(cur) ? `${cur} h logged. ` : '';
-  return `<section class="block card sleep-card"><div class="q-head"><h2>${isToday ? 'Sleep last night' : 'Sleep the night before'}</h2><span class="dim sm">hours</span></div>
-    <div class="seg sleep-seg">${SLEEP_CHOICES.map(h => `<button class="${cur === h ? 'on' : ''}" data-a="setSleep" data-v="${h}" data-k="${k}">${h}</button>`).join('')}</div>
-    <p class="dim sm">${note}${week.length >= 2 ? `Average ${round(avg(week), 1)} h over the last ${week.length} nights.` : 'Tap the closest one each morning.'}</p></section>`;
+  const night = peekDay(k).sleep, naps = sleepNaps(k), total = sleepTotal(k);
+  const week = datesIn(addDays(k, -6), k).map(sleepTotal).filter(x => x != null);
+  const odd = night != null && !SLEEP_CHOICES.includes(night) ? `Night: ${night} h. ` : '';
+  return `<section class="block card sleep-card"><div class="q-head"><h2>Sleep</h2><span class="dim sm">${total != null ? `${round(total, 2)} h in total` : 'hours'}</span></div>
+    <p class="sl-label">${k === today() ? 'Last night' : 'The night before'}</p>
+    <div class="seg sleep-seg">${SLEEP_CHOICES.map(h => `<button class="${night === h ? 'on' : ''}" data-a="setSleep" data-v="${h}" data-k="${k}">${h}</button>`).join('')}</div>
+    <p class="sl-label">Naps during the day</p>
+    <div class="pills nap-add">${NAP_CHOICES.map(([h, l]) => `<button class="pill" data-a="addNap" data-v="${h}" data-k="${k}">+ ${l}</button>`).join('')}</div>
+    ${naps.length ? `<p class="sl-label">Naps logged, tap to remove</p><div class="pills nap-list">${naps.map((h, n) => `<button class="pill on" data-a="dropNap" data-i="${n}" data-k="${k}" aria-label="Remove ${hrs(h)} nap">${hrs(h)} ✕</button>`).join('')}</div>` : ''}
+    <p class="dim sm">${odd}${week.length >= 2 ? `Average ${round(avg(week), 1)} h a day over the last ${week.length} days, naps included.` : 'Tap last night each morning, and add a nap whenever you take one.'}</p></section>`;
 }
 // A past day: the waist measured that day, which can still be added or changed.
 function waistDay(k) {
