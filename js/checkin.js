@@ -85,7 +85,7 @@ function foodDetail(now) {
     SLOTS.forEach(([slot, label]) => {
       const list = meals[slot] || [];
       if (!list.length) return;
-      out.push(`  ${label}: ${list.map(e => { const n = entryNa(e); return `${e.name} (${e.amount || `${round(e.grams || 0)} g`}) ${Math.round(e.kcal)} kcal ${Math.round(e.p)}/${Math.round(e.c)}/${Math.round(e.f)}${n != null ? `, Na ${Math.round(n)}` : ''}`; }).join('; ')}`);
+      out.push(`  ${label}: ${list.map(e => { const n = entryNa(e); return `${e.at != null ? `${clock24(e.at)} ` : ''}${e.name} (${e.amount || `${round(e.grams || 0)} g`}) ${Math.round(e.kcal)} kcal ${Math.round(e.p)}/${Math.round(e.c)}/${Math.round(e.f)}${n != null ? `, Na ${Math.round(n)}` : ''}`; }).join('; ')}`);
     });
   });
   const top = (f, unit, n = 6) => {
@@ -177,7 +177,8 @@ function checkInReport(s = checkInStatus()) {
     for (let n = 0; n < 4; n++) {
       const a = addDays(s.from, n * 7), b = n === 3 ? s.to : addDays(a, 6), w = periodNumbers(a, b);
       const wst = waist.filter(x => x.date >= a && x.date <= b).pop();
-      lines.push(`${dayLabel(a)}: weight ${r1(w.weight)}, ${w.kcal == null ? '–' : fmt(w.kcal)} kcal, ${w.protein == null ? '–' : Math.round(w.protein)} g P, ${w.workouts.length} workouts${wst ? `, waist ${round(wst.v, 1)}` : ''}`);
+      const rw = rhythmWeek(w.days);
+      lines.push(`${dayLabel(a)}: weight ${r1(w.weight)}, ${w.kcal == null ? '–' : fmt(w.kcal)} kcal, ${w.protein == null ? '–' : Math.round(w.protein)} g P, ${w.workouts.length} workouts${wst ? `, waist ${round(wst.v, 1)}` : ''}${rw ? `, ${rw}` : ''}`);
     }
   }
 
@@ -197,12 +198,10 @@ function checkInReport(s = checkInStatus()) {
   lines.push('', ...microReport(s.from, s.to));
 
   if (state.coach?.others) lines.push(`Also taken daily, not in the numbers above (no vitamins or minerals): ${state.coach.others}`);
-  const sleep = now.days.map(sleepTotal).filter(x => x != null), cardio = now.days.map(k => peekDay(k).cardio).filter(x => x != null);
+  const cardio = now.days.map(k => peekDay(k).cardio).filter(x => x != null);
   const water = now.days.map(k => peekDay(k).water).filter(x => x != null);
-  lines.push('', 'RECOVERY (each date = the night before it + naps that day)');
-  const sleepDay = k => { const t = sleepTotal(k), n = sleepNaps(k); return t == null ? '–' : n.length ? `${t} (night ${peekDay(k).sleep ?? '–'} + naps ${n.join(' + ')})` : `${t}`; };
-  const napDays = now.days.filter(k => sleepNaps(k).length).length;
-  lines.push(sleep.length ? `Sleep ${round(avg(sleep), 1)} h a day including naps (${sleep.length} of ${now.days.length} days logged, naps on ${napDays}): ${now.days.map(k => `${dayLabel(k)} ${sleepDay(k)}`).join(' | ')}` : 'Sleep not logged.');
+  lines.push(...rhythmReport(now.days.filter(k => k <= today())));
+  lines.push('', 'RECOVERY');
   lines.push(cardio.length ? `Cardio ${fmt(sum(cardio))} minutes in total.` : 'No cardio logged.');
   if (water.length) lines.push(`Water ${round(avg(water), 1)} L a day (${water.length} days logged).`);
   const changes = sortedTargetLog().filter(x => x.date >= addDays(s.from, -7) && x.date <= s.to);

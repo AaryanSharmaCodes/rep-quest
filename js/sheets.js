@@ -107,6 +107,7 @@ const SHEETS = {
       <div class="pills">${[0.5, 0.75, 1.5, 2].map(n => `<button class="pill" data-a="scaleEntry" data-by="${n}">× ${n}</button>`).join('')}</div>
       <div class="form"><div class="two">${field('Calories', 'e-kcal', round(e.kcal), 'inputmode="decimal"')}${field('Protein, g', 'e-p', round(e.p, 1), 'inputmode="decimal"')}</div>
       <div class="two">${field('Carbs, g', 'e-c', round(e.c, 1), 'inputmode="decimal"')}${field('Fat, g', 'e-f', round(e.f, 1), 'inputmode="decimal"')}</div>
+      ${field('Time eaten', 'e-at', e.at != null ? clock24(e.at) : '', 'type="time"')}
       <button class="btn solid wide" data-a="saveEntry">Save</button></div>
       <button class="link danger block-link" data-a="deleteEntry">Remove from ${esc(slotName(s.slot))}</button>`;
   },

@@ -220,7 +220,8 @@ function viewToday() {
   ${cleared.length ? `<section class="block"><h2>Completed</h2><ul class="quests">${cleared.map(q => questCard(q, info[q.id], fresh)).join('')}</ul></section>` : ''}
   ${suppToday()}
   ${waistToday()}
-  ${sleepCard(k)}`;
+  ${sleepCard(k)}
+  ${caffeineCard(k)}`;
 }
 const dayTop = (k, note = '') => `<header class="top"><div><h1>${parseKey(k).toLocaleDateString('en-IN', { weekday: 'long' })}</h1><p class="dim">${shortDate(k)}${note ? `, ${note}` : ''}</p></div><button class="btn line small" data-a="dayOpen" data-k="${today()}">Back to today</button></header>`;
 // A day that has already happened: everything logged on it, and all of it can still be changed.
@@ -246,6 +247,7 @@ function viewPastDay(k) {
   ${state.supplements.length ? suppCard(k) : ''}
   ${waistDay(k)}
   ${sleepCard(k)}
+  ${caffeineCard(k)}
   <section class="block"><div class="q-head"><h2>Food</h2><button class="link strong" data-a="dayFood" data-k="${k}">${t.items ? 'Edit food' : 'Add food'}</button></div>
     ${food || '<p class="empty">No food logged on this day.</p>'}</section>
   ${workouts.length ? `<section class="block"><h2>Workout</h2><div class="day-workouts">${train}</div></section>` : ''}`;
@@ -525,22 +527,6 @@ function waistToday() {
   const change = waist.length > 1 ? `, ${signed(round(waistIn(last.v) - waistIn(waist[0].v), 1), 1)} ${waistUnit()} since ${sinceWord(waist[0].date)}` : '';
   return `<section class="block card waist-today"><div class="q-head"><h2>Waist</h2><button class="link strong" data-a="openSheet" data-type="waist">${cur != null ? 'Edit today' : 'Log waist'}</button></div>
     <p class="dim sm">${last ? `${waistText(last.v)} ${whenWord(last.date)}${change}.` : 'Not measured yet. Once a week, in the morning, tape at the belly button.'}</p></section>`;
-}
-// Sleep for a day: last night (one tap) plus any naps during the day, each added separately.
-const SLEEP_CHOICES = [4, 5, 6, 6.5, 7, 7.5, 8, 9];
-const NAP_CHOICES = [[0.5, '30 min'], [1, '1 h'], [1.5, '1.5 h'], [2, '2 h'], [3, '3 h']];
-const hrs = h => (h < 1 ? `${Math.round(h * 60)} min` : `${round(h, 2)} h`);
-function sleepCard(k) {
-  const night = peekDay(k).sleep, naps = sleepNaps(k), total = sleepTotal(k);
-  const week = datesIn(addDays(k, -6), k).map(sleepTotal).filter(x => x != null);
-  const odd = night != null && !SLEEP_CHOICES.includes(night) ? `Night: ${night} h. ` : '';
-  return `<section class="block card sleep-card"><div class="q-head"><h2>Sleep</h2><span class="dim sm">${total != null ? `${round(total, 2)} h in total` : 'hours'}</span></div>
-    <p class="sl-label">${k === today() ? 'Last night' : 'The night before'}</p>
-    <div class="seg sleep-seg">${SLEEP_CHOICES.map(h => `<button class="${night === h ? 'on' : ''}" data-a="setSleep" data-v="${h}" data-k="${k}">${h}</button>`).join('')}</div>
-    <p class="sl-label">Naps during the day</p>
-    <div class="pills nap-add">${NAP_CHOICES.map(([h, l]) => `<button class="pill" data-a="addNap" data-v="${h}" data-k="${k}">+ ${l}</button>`).join('')}</div>
-    ${naps.length ? `<p class="sl-label">Naps logged, tap to remove</p><div class="pills nap-list">${naps.map((h, n) => `<button class="pill on" data-a="dropNap" data-i="${n}" data-k="${k}" aria-label="Remove ${hrs(h)} nap">${hrs(h)} ✕</button>`).join('')}</div>` : ''}
-    <p class="dim sm">${odd}${week.length >= 2 ? `Average ${round(avg(week), 1)} h a day over the last ${week.length} days, naps included.` : 'Tap last night each morning, and add a nap whenever you take one.'}</p></section>`;
 }
 // A past day: the waist measured that day, which can still be added or changed.
 function waistDay(k) {

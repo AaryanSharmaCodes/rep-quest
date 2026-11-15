@@ -127,7 +127,9 @@ function refreshFoodResults() {
 function logEntry(date, slot, entry) {
   const d = getDay(date);
   d.meals = d.meals || {};
-  (d.meals[slot] = d.meals[slot] || []).push({ ...entry, id: uid() });
+  // The time it was logged, so coffee and other caffeine land at the right hour. Past days get no guess.
+  const at = entry.at ?? (date === today() ? nowMin() : undefined);
+  (d.meals[slot] = d.meals[slot] || []).push({ ...entry, ...(at != null ? { at } : {}), id: uid() });
   if (entry.mi === undefined && entry.source !== 'm') setTimeout(backfillMicros, 0);
 }
 function addToRecent(food) {
@@ -608,26 +610,6 @@ const A = {
     haptic();
     closeSheet();
   },
-  setSleep(d) {
-    const day = getDay(d.k || today()), h = Number(d.v);
-    if (day.sleep === h) delete day.sleep; else day.sleep = h;
-    haptic();
-    commit();
-  },
-  addNap(d) {
-    const day = getDay(d.k || today());
-    day.naps = [...(day.naps || []), Number(d.v)];
-    haptic();
-    toast(`Nap added. ${sleepTotal(d.k || today())} h of sleep for the day.`);
-    commit();
-  },
-  dropNap(d) {
-    const day = getDay(d.k || today());
-    day.naps = (day.naps || []).filter((_, n) => n !== Number(d.i));
-    if (!day.naps.length) delete day.naps;
-    haptic();
-    commit();
-  },
   clearWaist() {
     delete getDay(ui.sheet.date || today()).waist;
     haptic();
@@ -783,6 +765,8 @@ const A = {
     const s = ui.sheet;
     const e = peekDay(ui.foodDate).meals[s.slot].find(x => x.id === s.id);
     e.kcal = num(v('e-kcal')) || 0; e.p = num(v('e-p')) || 0; e.c = num(v('e-c')) || 0; e.f = num(v('e-f')) || 0;
+    const at = timeToMin(v('e-at'));
+    if (at != null) e.at = at; else if (document.getElementById('e-at') && !v('e-at')) delete e.at;
     closeSheet();
   },
   deleteEntry() {
@@ -1100,6 +1084,7 @@ const A = {
   },
   importData() { document.getElementById('restore-file')?.click(); },
 };
+Object.assign(A, RHYTHM_ACTIONS);
 
 function refreshAmount() {
   const s = ui.sheet, f = ui.foodIndex[s.foodId];
@@ -1180,6 +1165,7 @@ const FIELD = {
   liftChart(d, el) { ui.liftChart = el.value; render(); },
   targetCheck() { refreshMacroSum(); },
 };
+Object.assign(FIELD, RHYTHM_FIELDS);
 
 /* ---------- Events ---------- */
 // iPhone Safari only shows :active press effects once the page listens for touches.
