@@ -3,7 +3,9 @@
 // and effects clean up after themselves. Respects the Animations switch and the phone's Reduce Motion setting.
 const Motion = (() => {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
-  const on = () => !reduced.matches && state.settings?.animations !== false;
+  // Full plays everything even when the phone asks for less motion; Auto follows the phone; Gentle keeps only fades.
+  const mode = () => (state.settings?.animations === false && !state.settings?.motion ? 'off' : state.settings?.motion || 'auto');
+  const on = () => { const m = mode(); return m === 'full' || (m === 'auto' && !reduced.matches); };
   // Real spring physics (from Motion), run by the browser's own animation engine so a busy page can't stutter them.
   const canSpring = !!window.MotionLib && CSS.supports('transition-timing-function', 'linear(0, 1)');
   const springs = {};
@@ -44,7 +46,7 @@ const Motion = (() => {
       const canvas = document.createElement('canvas');
       canvas.className = 'fx-canvas';
       fxLayer().appendChild(canvas);
-      fire = confetti.create(canvas, { resize: true, useWorker: true, disableForReducedMotion: true });
+      fire = confetti.create(canvas, { resize: true, useWorker: true, disableForReducedMotion: false }); // on() already decides
     }
     const t = theme();
     fire({
@@ -89,13 +91,50 @@ const Motion = (() => {
     wrap.firstChild.animate([{ transform: 'translateX(-110%) skewX(-18deg)' }, { transform: 'translateX(320%) skewX(-18deg)' }], { duration: 650, easing: 'ease-out' }).onfinish = () => wrap.remove();
   }
 
+  function targetHit(bar, text) {
+    const r = bar.getBoundingClientRect();
+    const x = r.width ? r.right - 6 : innerWidth / 2, y = r.height ? r.top + r.height / 2 : innerHeight * 0.4;
+    ring(x, y);
+    burst(x, y, { count: 34, spread: 120, velocity: 26, ticks: 90 });
+    float(text, innerWidth / 2, Math.max(y - 30, 110), true);
+    playBest();
+    haptic();
+  }
+  // Foods logged since the Food page was last on screen slide in and glow once the sheet is out of the way.
+  function freshRows(app) {
+    const ids = ui.freshFood;
+    if (!ids || !ids.size) return;
+    const rows = [...ids].map(id => app.querySelector(`[data-key="food-${CSS.escape(id)}"]`)).filter(Boolean);
+    ids.clear();
+    if (!rows.length) return;
+    const first = rows[0].getBoundingClientRect();
+    const hidden = first.top < 70 || first.bottom > innerHeight - 100;
+    if (hidden) rows[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
+    rows.forEach((li, n) => {
+      const delay = (hidden ? 320 : 40) + n * 70;
+      sp(li, [{ transform: 'translateX(-18px) scale(.96)', opacity: 0 }, { transform: 'none', opacity: 1 }], { bounce: 0.32, dur: 0.46, delay, fill: 'backwards' });
+      setTimeout(() => {
+        if (!li.isConnected) return;
+        li.classList.remove('just-added'); void li.offsetWidth; li.classList.add('just-added');
+        const row = li.querySelector('.row');
+        if (row) sweep(row);
+        if (n === rows.length - 1) { const [x, y] = center(li); burst(x, y, { count: 10, spread: 70, velocity: 12, ticks: 40, scalar: 0.6 }); }
+      }, delay + 120);
+      setTimeout(() => li.classList.remove('just-added'), delay + 1500);
+    });
+  }
+
   /* ---------- Bars and numbers move from where they were ---------- */
   function syncBars(root, entering) {
     root.querySelectorAll('[data-k][data-pct]').forEach(el => {
       const cur = Number(el.dataset.pct), prev = entering ? 0 : ui.bars[el.dataset.k];
       ui.bars[el.dataset.k] = cur;
       if (prev == null || prev === cur || cur <= 0) return;
-      el.animate([{ transform: `scaleX(${prev / cur})` }, { transform: 'scaleX(1)' }], { duration: entering ? 620 : 420, easing: OUT, delay: entering ? 120 : 0, fill: 'backwards' });
+      el.animate([{ transform: `scaleX(${prev / cur})` }, { transform: 'scaleX(1)' }], { duration: entering ? 620 : 520, easing: OUT, delay: entering ? 120 : 60, fill: 'backwards' });
+      if (entering || cur < prev) return;
+      // Growing bars glint as they fill, and protein crossing its target gets its own moment.
+      el.animate([{ filter: 'brightness(1)' }, { filter: 'brightness(1.9)', offset: 0.35 }, { filter: 'brightness(1)' }], { duration: 900, delay: 80, easing: 'ease-out' });
+      if (/protein/i.test(el.dataset.k) && prev < 100 && cur >= 100) setTimeout(() => targetHit(el, 'Protein target hit!'), 520);
     });
   }
   function syncNumbers(root, entering) {
@@ -103,7 +142,8 @@ const Motion = (() => {
       const end = Number(el.dataset.count), start = entering ? 0 : ui.nums[el.dataset.k];
       ui.nums[el.dataset.k] = end;
       if (start == null || start === end) return;
-      const t0 = performance.now(), dur = 520;
+      if (!entering) sp(el, [{ transform: 'scale(1.14)' }, { transform: 'none' }], { bounce: 0.5, dur: 0.42 });
+      const t0 = performance.now(), dur = entering ? 520 : 640;
       el.textContent = fmt(start);
       const step = now => {
         if (!el.isConnected) return;
@@ -239,14 +279,39 @@ const Motion = (() => {
 
   return {
     pop, burst, morph,
+    mode, phoneReduces: () => reduced.matches, live: () => on(),
+    // A floating message when animations play, a plain toast when they don't.
+    say(text) { if (on()) this.floatMid(text); else toast(text); },
     refresh() {
-      document.documentElement.dataset.motion = on() ? 'on' : 'off';
+      document.documentElement.dataset.motion = on() ? 'on' : mode() === 'off' ? 'off' : 'gentle';
+    },
+    // A chip or tick that was just switched on.
+    chip(sel) {
+      if (!on()) return;
+      const el = typeof sel === 'string' ? document.querySelector(sel) : sel;
+      if (!el) return;
+      const [x, y] = center(el);
+      sp(el, [{ transform: 'scale(.82)' }, { transform: 'scale(1.08)', offset: 0.55 }, { transform: 'none' }], { bounce: 0.5, dur: 0.42 });
+      const tick = el.querySelector('svg');
+      if (tick) sp(tick, [{ transform: 'scale(0) rotate(-45deg)', opacity: 0 }, { transform: 'none', opacity: 1 }], { bounce: 0.6, dur: 0.4, delay: 60, fill: 'backwards' });
+      ring(x, y);
+      burst(x, y, { count: 9, spread: 80, velocity: 12, ticks: 36, scalar: 0.55 });
+    },
+    // Several chips in a row, one after another.
+    cascade(sel, text) {
+      if (!on()) { if (text) toast(text); return; }
+      const els = [...document.querySelectorAll(sel)];
+      els.forEach((el, n) => setTimeout(() => this.chip(el), n * 90));
+      if (text) setTimeout(() => this.floatMid(text), els.length * 90 + 60);
     },
     after(fn) { queue.push(fn); },
     afterRender(app, entering) {
       const live = on();
       if (entering && live) enter(app);
-      if (live) { syncBars(app, entering); syncNumbers(app, entering); } else {
+      const covered = !!document.querySelector('#sheet .panel');
+      // While a sheet covers the page, its bars and numbers wait: they move when the sheet closes, where you can see them.
+      if (live && covered) { /* animate on the next render */ } else if (live) { syncBars(app, entering); syncNumbers(app, entering); freshRows(app); } else {
+        ui.freshFood?.clear();
         app.querySelectorAll('[data-k][data-pct]').forEach(el => { ui.bars[el.dataset.k] = Number(el.dataset.pct); });
         app.querySelectorAll('[data-count][data-k]').forEach(el => { ui.nums[el.dataset.k] = Number(el.dataset.count); });
       }
@@ -284,6 +349,9 @@ const Motion = (() => {
         host.style.pointerEvents = '';
         delete host.dataset.closing;
         done();
+        // What changed behind the sheet moves now that it can be seen.
+        const app = document.getElementById('app');
+        if (app && on() && !host.querySelector('.panel')) { syncBars(app, false); syncNumbers(app, false); freshRows(app); }
       };
     },
     // The quote of the day, a word at a time. Tap to carry on, or it moves along by itself.

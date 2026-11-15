@@ -729,7 +729,8 @@ html[data-theme=arcade] .btn.solid:active { transform: translate(3px, 3px); box-
 html[data-theme=arcade] .quest:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 #ff3d81; }
 html[data-theme=arcade] .fx-ring { border-radius: 0; }
 
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+/* Gentle: Auto on a phone with Reduce Motion, or picked under You. Fades stay, nothing moves. */
+html[data-motion=gentle] *, html[data-motion=gentle] *::before, html[data-motion=gentle] *::after { animation: none !important; transition-property: opacity, color, background-color, border-color !important; }
 
 /* Check-ins with Claude */
 .checkin-due { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; margin: 4px 0 14px; text-align: left; border: 1px solid var(--accent); }
@@ -806,3 +807,17 @@ html[data-theme=arcade] .fx-ring { border-radius: 0; }
 .rng input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 30px; height: 30px; margin-top: -13px; border-radius: 50%; background: var(--accent-hi); border: 3px solid var(--bg); box-shadow: 0 1px 4px rgba(0,0,0,.35); }
 .rng input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 50%; background: var(--accent-hi); border: 3px solid var(--bg); }
 .sl-dur { text-align: center; font-size: 22px; font-weight: 600; margin: 2px 0 14px; color: var(--ink); }
+
+/* Freshly logged foods glow for a moment */
+.rows .row { position: relative; }
+.rows li.just-added > .row::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: var(--accent-hi); pointer-events: none; animation: glow-out 1.3s cubic-bezier(.23, 1, .32, 1) both; }
+@keyframes glow-out { from { opacity: .3; } to { opacity: 0; } }
+.supp-chip, .supp, .pill, .row, .quest { transition: transform 160ms cubic-bezier(.23, 1, .32, 1), background-color .2s ease, border-color .2s ease; }
+.supp-chip:active, .supp:active, .pill:active { transform: scale(.94); }
+.row:active { transform: scale(.985); }
+.rng input[type=range]::-webkit-slider-thumb { transition: transform 160ms cubic-bezier(.23, 1, .32, 1); }
+.rng input[type=range]:active::-webkit-slider-thumb { transform: scale(1.2); }
+.mode-seg { margin: 4px 0 0; }
+.row.col { flex-direction: column; align-items: stretch; gap: 2px; }
+.row.col em { font-size: 13px; color: var(--dim); font-style: normal; }
+.mode-seg button { font-size: 13px; }

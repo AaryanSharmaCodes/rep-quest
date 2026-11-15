@@ -90,9 +90,13 @@ function sleepSheet(s) {
     ${existing ? '<button class="link danger block-link" data-a="deleteSleep">Remove</button>' : ''}</div>`;
 }
 // Keeps the two times apart (at least 15 minutes) and redraws only the parts that change while dragging.
+let sleepTickAt = 0;
 function setSleepTime(key, value) {
   const s = ui.sheet, [lo, hi] = SLEEP_WINDOW[s.kind];
+  const before = s[key];
   s[key] = clamp(value, lo, hi);
+  // A light tick for every 15 minutes passed, like the iPhone's own time wheels.
+  if (s[key] !== before && performance.now() - sleepTickAt > 45) { sleepTickAt = performance.now(); haptic(); }
   if (key === 'start' && s.end < s.start + 15) s.end = Math.min(hi, s.start + 15);
   if (key === 'end' && s.start > s.end - 15) s.start = Math.max(lo, s.end - 15);
   if (s.end - s.start < 15) s.start = s.end - 15;
@@ -231,7 +235,8 @@ const RHYTHM_ACTIONS = {
     if (at >= 0) day.sleeps[at] = entry; else day.sleeps.push(entry);
     if (entry.kind === 'night') delete day.sleep; // timed night replaces an older hours-only one
     haptic();
-    toast(`${entry.kind === 'night' ? 'Night' : 'Nap'} saved: ${durText(sleepMins(entry))}`);
+    playFood();
+    Motion.after(() => Motion.say(`${durText(sleepMins(entry))} of ${entry.kind === 'night' ? 'sleep' : 'nap'}`));
     closeSheet();
   },
   deleteSleep() {
@@ -255,6 +260,8 @@ const RHYTHM_ACTIONS = {
       const what = existing?.what || s.what || 'coffee';
       if (existing) Object.assign(existing, { at, mg }); else day.caf.push({ id: uid(), what, mg, at });
       state.settings.cafMg = { ...(state.settings.cafMg || {}), [what]: mg };
+      playFood();
+      Motion.after(() => Motion.say(`+${mg} mg caffeine`));
     }
     haptic();
     closeSheet();

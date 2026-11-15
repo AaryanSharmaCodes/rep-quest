@@ -61,7 +61,7 @@ function scheduleSave() { if (state) state.editedAt = Date.now(); clearTimeout(s
 function flushSave() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; writeSave(); } }
 
 /* ---------- State ---------- */
-const APP_VERSION = 28; // matches CACHE in sw.js
+const APP_VERSION = 29; // matches CACHE in sw.js
 const THEMES = [
   { id: 'game', name: 'Quest', bar: '#170e33', fx: ['#b78eff', '#dfceff', '#ffffff', '#7f5cff'], shapes: ['star', 'circle'], burst: 1 },
   { id: 'light', name: 'Minimal', bar: '#f7f7f4', fx: ['#17171a', '#8a8a8e', '#c9c9c5'], shapes: ['circle'], burst: 0.6 },
@@ -107,7 +107,7 @@ function defaultState() {
     homeChoice: {},
     deloadUntil: null,
     dismissed: {},
-    settings: { usdaKey: '', sound: true, showRir: false, showWaist: false, waistUnit: 'cm', theme: 'game', animations: true, place: 'gym', placeOn: null, homeGear: {} },
+    settings: { usdaKey: '', sound: true, showRir: false, showWaist: false, waistUnit: 'cm', theme: 'game', animations: true, motion: 'auto', place: 'gym', placeOn: null, homeGear: {} },
   };
 }
 
@@ -161,6 +161,8 @@ function migrate(saved) {
       s.kcalChangedOn = today();
       s.targetsFixed = true;
     }
+    // He asked for every animation (15 Nov 2026): Full plays them even with the iPhone's Reduce Motion on.
+    if (saved.settings?.motion == null && s.onboarded) s.settings.motion = saved.settings?.animations === false ? 'off' : 'full';
     applyCoach(s);
     return s;
   }

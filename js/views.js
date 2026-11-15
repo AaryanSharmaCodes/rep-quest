@@ -598,7 +598,9 @@ function viewYou() {
   <section class="block"><h2>Options</h2><ul class="rows">
     ${isInstalled() ? '' : '<li><button class="row" data-a="openSheet" data-type="installGuide"><span>Add to your Home Screen</span></button></li>'}
     <li><label class="row"><span>Log reps in reserve</span><input type="checkbox" class="sw" data-f="setting" data-k="showRir" ${state.settings.showRir ? 'checked' : ''}></label></li>
-    <li><label class="row"><span>Animations</span><input type="checkbox" class="sw" data-f="setting" data-k="animations" ${state.settings.animations !== false ? 'checked' : ''}></label></li>
+    <li><div class="row col"><span>Animations</span>
+      <div class="seg mode-seg">${[['full', 'Full'], ['auto', 'Like iPhone'], ['gentle', 'Gentle'], ['off', 'Off']].map(([m, l]) => `<button class="${Motion.mode() === m ? 'on' : ''}" data-a="motionMode" data-v="${m}">${l}</button>`).join('')}</div>
+      ${Motion.phoneReduces() ? '<em>Your iPhone has Reduce Motion on. Full plays every animation anyway.</em>' : ''}</div></li>
     <li><label class="row"><span>Sounds</span><input type="checkbox" class="sw" data-f="setting" data-k="sound" ${state.settings.sound ? 'checked' : ''}></label></li>
   </ul></section>
   <section class="block"><h2>Your data</h2>

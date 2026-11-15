@@ -24,6 +24,8 @@ function tone(freq, dur, type = 'sine', gain = 0.12, when = 0) {
 // Iron on iron: two detuned metallic partials with a fast decay.
 function playClang() { tone(1250, 0.22, 'triangle', 0.05); tone(1873, 0.16, 'sine', 0.03); tone(180, 0.09, 'sine', 0.14); }
 function playTick() { tone(880, 0.05, 'sine', 0.05); }
+// A soft rising double blip, like a bubble: food, supplements, sleep and caffeine logged.
+function playFood() { tone(587, 0.07, 'sine', 0.07); tone(880, 0.1, 'sine', 0.06, 0.055); tone(1320, 0.08, 'triangle', 0.025, 0.1); }
 function playBeep() { tone(880, 0.16, 'sine', 0.16); tone(1175, 0.2, 'sine', 0.16, 0.2); }
 function playBest() { tone(784, 0.1, 'triangle', 0.1); tone(1175, 0.2, 'triangle', 0.1, 0.1); }
 // Climbs a little with each set of an exercise, so finishing one sounds like getting somewhere.
@@ -129,7 +131,9 @@ function logEntry(date, slot, entry) {
   d.meals = d.meals || {};
   // The time it was logged, so coffee and other caffeine land at the right hour. Past days get no guess.
   const at = entry.at ?? (date === today() ? nowMin() : undefined);
-  (d.meals[slot] = d.meals[slot] || []).push({ ...entry, ...(at != null ? { at } : {}), id: uid() });
+  const id = uid();
+  (d.meals[slot] = d.meals[slot] || []).push({ ...entry, ...(at != null ? { at } : {}), id });
+  (ui.freshFood = ui.freshFood || new Set()).add(id); // glows on the Food page once it's in view
   if (entry.mi === undefined && entry.source !== 'm') setTimeout(backfillMicros, 0);
 }
 function addToRecent(food) {
@@ -608,6 +612,8 @@ const A = {
     if (!waistValid(w)) { toast(`Enter your waist in ${waistUnit() === 'in' ? 'inches' : 'cm'}`); return; }
     getDay(ui.sheet.date || today()).waist = w;
     haptic();
+    playFood();
+    Motion.after(() => Motion.say(`Waist ${waistText(w)}`));
     closeSheet();
   },
   clearWaist() {
@@ -661,15 +667,22 @@ const A = {
   toggleSupp(d) {
     const day = getDay(d.k || today());
     const list = day.supps || [];
-    day.supps = list.includes(d.id) ? list.filter(x => x !== d.id) : [...list, d.id];
+    const adding = !list.includes(d.id);
+    day.supps = adding ? [...list, d.id] : list.filter(x => x !== d.id);
     if (!day.supps.length) delete day.supps;
     haptic();
+    if (adding) {
+      const allNow = suppTaken(d.k || today()).length >= state.supplements.length;
+      if (allNow) playBest(); else playFood();
+      Motion.after(() => { Motion.chip(`[data-a="toggleSupp"][data-id="${d.id}"]`); if (allNow) setTimeout(() => Motion.say('All supplements taken'), 160); });
+    }
     commit();
   },
   allSupps(d) {
     getDay(d.k || today()).supps = state.supplements.map(s => s.id);
     haptic();
-    toast('Supplements ticked');
+    playBest();
+    Motion.after(() => Motion.cascade('[data-a="toggleSupp"]', 'All supplements taken'));
     commit();
   },
   microRange(d) { ui.microRange = d.v; render(); },
@@ -693,7 +706,7 @@ const A = {
     addToRecent(compactFood(f));
     bumpAdded(parent);
     haptic();
-    playTick();
+    playFood();
     scheduleSave();
     const addedEl = document.getElementById('food-added');
     if (addedEl && parent) { addedEl.textContent = `${parent.added} added`; Motion.pop(addedEl); }
@@ -731,7 +744,7 @@ const A = {
     bumpAdded(parent);
     ui.sheet = ui.sheetStack.pop() || null;
     haptic();
-    playTick();
+    playFood();
     Motion.after(() => Motion.floatMid(`+${fmt(logged.kcal)} kcal`));
     commit();
   },
@@ -777,8 +790,9 @@ const A = {
   copyMeal(d) {
     const items = peekDay(d.from).meals?.[d.slot] || [];
     items.forEach(e => { const { id, ...rest } = e; logEntry(ui.foodDate, d.slot, rest); });
-    toast(`${items.length} foods added`);
     haptic();
+    playFood();
+    Motion.after(() => Motion.say(`${items.length} foods added`));
     commit();
   },
   saveMeal() {
@@ -796,9 +810,9 @@ const A = {
     const { parent, date, slot } = ui.sheet ? targetSlotAndDate() : { date: ui.foodDate, slot: d.slot || m.slot };
     m.items.forEach(e => { const { id, ...rest } = e; logEntry(date, slot, rest); });
     bumpAdded(parent);
-    toast(`${m.name} added`);
     haptic();
-    playTick();
+    playFood();
+    Motion.after(() => Motion.say(`${m.name} added`));
     commit();
   },
   deleteMeal(d) {
@@ -1083,6 +1097,7 @@ const A = {
     closeSheet();
   },
   importData() { document.getElementById('restore-file')?.click(); },
+  motionMode(d) { state.settings.motion = d.v; state.settings.animations = d.v !== 'off'; Motion.refresh(); haptic(); commit(); Motion.after(() => Motion.say(d.v === 'off' ? 'Animations off' : d.v === 'full' ? 'Full animations' : 'Animations follow your iPhone')); },
 };
 Object.assign(A, RHYTHM_ACTIONS);
 
