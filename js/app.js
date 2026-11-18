@@ -248,7 +248,6 @@ function finishWorkout() {
     sets: e.sets.filter(s => s.done).map(s => {
       const out = { w: Number(s.w) || 0, r: Number(s.r) || 0 };
       if (s.type) out.type = s.type;
-      if (s.rir !== '' && s.rir != null) out.rir = Number(s.rir);
       return out;
     }),
   })).filter(e => e.sets.length);
@@ -672,14 +671,15 @@ const A = {
     if (!day.supps.length) delete day.supps;
     haptic();
     if (adding) {
-      const allNow = suppTaken(d.k || today()).length >= state.supplements.length;
+      const allNow = suppsOn(d.k || today()).every(s => suppTaken(d.k || today()).includes(s.id));
       if (allNow) playBest(); else playFood();
       Motion.after(() => { Motion.chip(`[data-a="toggleSupp"][data-id="${d.id}"]`); if (allNow) setTimeout(() => Motion.say('All supplements taken'), 160); });
     }
     commit();
   },
   allSupps(d) {
-    getDay(d.k || today()).supps = state.supplements.map(s => s.id);
+    const k = d.k || today(), day = getDay(k);
+    day.supps = [...new Set([...(day.supps || []), ...suppsOn(k).map(s => s.id)])];
     haptic();
     playBest();
     Motion.after(() => Motion.cascade('[data-a="toggleSupp"]', 'All supplements taken'));
@@ -711,6 +711,7 @@ const A = {
     const addedEl = document.getElementById('food-added');
     if (addedEl && parent) { addedEl.textContent = `${parent.added} added`; Motion.pop(addedEl); }
     Motion.foodAdded(el, m.kcal);
+    Motion.added(`Added to ${slotName(slot)}`, `${f.name}, ${fmt(m.kcal)} kcal`);
     const row = el.closest('.food-row');
     row?.classList.add('flash');
     setTimeout(() => row?.classList.remove('flash'), 500);
@@ -745,7 +746,7 @@ const A = {
     ui.sheet = ui.sheetStack.pop() || null;
     haptic();
     playFood();
-    Motion.after(() => Motion.floatMid(`+${fmt(logged.kcal)} kcal`));
+    Motion.after(() => Motion.added(`Added to ${slotName(slot)}`, `${f.name}, ${fmt(logged.kcal)} kcal`));
     commit();
   },
   deleteCustomFood(d) {
@@ -766,6 +767,9 @@ const A = {
     }
     bumpAdded(parent);
     ui.sheet = ui.sheetStack.pop() || null;
+    haptic();
+    playFood();
+    Motion.after(() => Motion.added(`Added to ${slotName(slot)}`, `${name}, ${fmt(total)} kcal`));
     commit();
   },
   scaleEntry(d) {
@@ -789,10 +793,10 @@ const A = {
   },
   copyMeal(d) {
     const items = peekDay(d.from).meals?.[d.slot] || [];
-    items.forEach(e => { const { id, ...rest } = e; logEntry(ui.foodDate, d.slot, rest); });
+    items.forEach(e => { const { id, at, ...rest } = e; logEntry(ui.foodDate, d.slot, rest); }); // a copy is eaten now, not at yesterday's time
     haptic();
     playFood();
-    Motion.after(() => Motion.say(`${items.length} foods added`));
+    Motion.after(() => Motion.added(`${items.length} ${items.length === 1 ? 'food' : 'foods'} added`, slotName(d.slot)));
     commit();
   },
   saveMeal() {
@@ -808,11 +812,11 @@ const A = {
     const m = state.savedMeals.find(x => x.id === d.id);
     if (!m) return;
     const { parent, date, slot } = ui.sheet ? targetSlotAndDate() : { date: ui.foodDate, slot: d.slot || m.slot };
-    m.items.forEach(e => { const { id, ...rest } = e; logEntry(date, slot, rest); });
+    m.items.forEach(e => { const { id, at, ...rest } = e; logEntry(date, slot, rest); });
     bumpAdded(parent);
     haptic();
     playFood();
-    Motion.after(() => Motion.say(`${m.name} added`));
+    Motion.after(() => Motion.added(`${m.name} added`, slotName(slot)));
     commit();
   },
   deleteMeal(d) {

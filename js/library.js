@@ -245,7 +245,7 @@ function planRow(name, sets, lo, hi) {
   return {
     id: uid(), name, sets, lo: lo ?? lib?.lo ?? 8, hi: hi ?? lib?.hi ?? 12,
     p: lib?.p || 'abs', s: lib?.s || [], kind: lib?.kind || 'isolation', unit: lib?.unit || 'reps',
-    inc: lib?.inc ?? 2.5, rest: lib?.rest ?? 90, mode: 'double', rirGoal: 2, superset: false,
+    inc: lib?.inc ?? 2.5, rest: lib?.rest ?? 90, mode: 'double', superset: false,
   };
 }
 const D = (name, rows) => ({ id: uid(), name, exercises: rows.map(r => planRow(...r)) });

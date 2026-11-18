@@ -4,6 +4,8 @@
 //   indb-tsv: INDB.xlsx converted to tab-separated text with a header row
 //   ifct-csv: compositions/index.csv from the ifct2017 npm package (Indian Food Composition Tables 2017, NIN)
 //   off.tsv:  output of filter-off.mjs
+// Writes core.txt (curated, INDB, IFCT, USDA), india.txt (Open Food Facts products tagged India), india-brands*.txt
+// (other Indian products: 890 barcodes, Indian brands), world-N.txt, meta.json and synonyms.json. tools/food-data-log.md lists the data fixes.
 //
 // Each row: name, brand, kcal, protein, carbs, fat (per 100 g), servings, source, barcode, micros.
 // Micros are letter + number pairs per 100 g in the order of MICROS (a = fibre ... u = ALA), then "#n", the food's group.
@@ -122,7 +124,8 @@ const encode = (values, group, name) => {
 };
 const row = (name, brand, kcal, p, c, f, servings, src, code, micros) =>
   [tidy(name), tidy(brand), Math.round(kcal), r1(p), r1(c), r1(f), servings, src, code, micros].join('\t');
-const serving = (label, g) => `${tidy(label).replace(/:/g, ' ').slice(0, 28)}:${r1(g)}`;
+// Servings under 1 g are label typos ("0.04 g") and would show as 0 g, so they're left out.
+const serving = (label, g) => (r1(g) >= 1 ? `${tidy(label).replace(/:/g, ' ').slice(0, 28)}:${r1(g)}` : null);
 
 const seen = new Set();
 const key = (name, brand) => (name + '|' + brand).toLowerCase().replace(/[^a-z0-9|]/g, '');
@@ -132,9 +135,9 @@ const sane = (kcal, p, c, f) => {
   return Math.abs(4 * p + 4 * c + 9 * f - kcal) <= Math.max(45, kcal * 0.4);
 };
 
-// Every source's micronutrients, so hand-written foods can borrow from a match.
+// Every source's micronutrients (and protein, to scale them), so hand-written foods can borrow from a match.
 const vectors = {};
-const putVector = (src, name, values) => { (vectors[src] ||= {})[tidy(name).toLowerCase()] ||= values; };
+const putVector = (src, name, values, protein) => { (vectors[src] ||= {})[tidy(name).toLowerCase()] ||= { values, protein }; };
 
 /* Read the sources */
 const usdaValue = (food, specs) => {
@@ -155,7 +158,7 @@ const usdaFiles = [
   const list = JSON.parse(fs.readFileSync(path.join(usdaDir, file), 'utf8'))[listKey];
   const foods = list.map(food => {
     const values = MICROS.map(([, nums]) => usdaValue(food, nums));
-    putVector(src, food.description, values);
+    putVector(src, food.description, values, usdaValue(food, ['203']));
     return { food, values, hint: food.foodCategory?.description || '' };
   });
   return { src, foods };
@@ -173,7 +176,7 @@ const indbRows = (() => {
       const xs = cols.map(cell);
       return xs.every(x => x == null) ? null : xs.reduce((s, x) => s + (x || 0), 0);
     });
-    putVector('i', text('food_name'), values);
+    putVector('i', text('food_name'), values, cell('protein_g'));
     return { cell, text, values };
   });
 })();
@@ -187,22 +190,35 @@ const ifctRows = (() => {
     else if (ch === '"') q = true; else if (ch === ',') { r.push(cell); cell = ''; } else if (ch === '\n') { r.push(cell); rows.push(r); r = []; cell = ''; } else if (ch !== '\r') cell += ch;
   }
   const head = rows[0];
+  const objs = rows.slice(1).filter(x => x.length > 5).map(x => Object.fromEntries(head.map((h, i) => [h, x[i]])));
+  // The ifct2017 package writes 0 where a nutrient wasn't analysed, so a column that is 0 for every food in a group
+  // (folate in all meat and fish, retinol in milk, everything in oils) means "not measured", not "none".
+  // These all-zero columns really are zero in those foods, so they stay: no D3, K2, EPA/DHA or retinol in plants; no fibre or carotene in meat.
+  const PLANT = /Cereals|Legumes|Vegetables|Fruits|Roots|Condiments|Nuts|Sugars|Mushrooms|Miscellaneous/;
+  const TRUE_ZERO = grp => PLANT.test(grp) ? ['chocal', 'vitk2', 'f20d5n3', 'f22d6n3', 'retol', 'carta', 'crypxb', 'cartb'] : ['fibtg', 'ergcal', 'cartb', 'carta', 'crypxb', 'vitc'];
+  const unmeasured = {};
+  for (const grp of new Set(objs.map(o => o.grup))) {
+    const list = objs.filter(o => o.grup === grp);
+    unmeasured[grp] = new Set(head.filter(h => !TRUE_ZERO(grp).includes(h) && list.every(o => !(parseFloat(o[h]) > 0))));
+  }
+  // Fish B6 is printed in mg where every other IFCT value is in g (1000x too high: 194 mg in a fish that has 0.19 mg).
+  const B6_IN_MG = /Marine Fish|Marine Shellfish|Marine Mollusks|Fresh Water Fish/;
   // IFCT stores every nutrient in grams per 100 g and energy in kJ.
-  return rows.slice(1).filter(x => x.length > 5).map(x => {
-    const o = Object.fromEntries(head.map((h, i) => [h, x[i]]));
-    const g = k => { const n = parseFloat(o[k]); return Number.isFinite(n) ? n : null; };
+  return objs.map(o => {
+    const g = k => { if (unmeasured[o.grup].has(k)) return null; const n = parseFloat(o[k]); return Number.isFinite(n) ? n : null; };
     const sum = (ks, mul) => { const xs = ks.map(g); return xs.every(n => n == null) ? null : xs.reduce((s, n) => s + (n || 0), 0) * mul; };
     const values = {
       fib: sum(['fibtg'], 1), ca: sum(['ca'], 1e3), fe: sum(['fe'], 1e3), mg: sum(['mg'], 1e3), zn: sum(['zn'], 1e3), k: sum(['k'], 1e3), na: sum(['na'], 1e3),
       se: sum(['se'], 1e6), vc: sum(['vitc'], 1e3), vd: sum(['ergcal', 'chocal'], 1e6), ve: sum(['vite'], 1e3), vk: sum(['vitk1', 'vitk2'], 1e6),
-      b1: sum(['thia'], 1e3), b2: sum(['ribf'], 1e3), b3: sum(['nia'], 1e3), b6: sum(['vitb6c'], 1e3), b12: null, fol: sum(['folsum'], 1e6),
+      b1: sum(['thia'], 1e3), b2: sum(['ribf'], 1e3), b3: sum(['nia'], 1e3), b6: sum(['vitb6c'], B6_IN_MG.test(o.grup) ? 1 : 1e3), b12: null, fol: sum(['folsum'], 1e6),
       o3: sum(['f20d5n3', 'f22d6n3'], 1e3), ala: sum(['f18d3n3'], 1),
-      // Retinol activity equivalents, so plant foods aren't counted at full carotene.
-      va: g('retol') == null && g('cartb') == null ? null : ((g('retol') || 0) + (g('cartb') || 0) / 12 + ((g('carta') || 0) + (g('crypxb') || 0)) / 24) * 1e6,
+      // Retinol activity equivalents, so plant foods aren't counted at full carotene. Animal foods without a retinol figure have no vitamin A figure.
+      va: g('retol') == null && (g('cartb') == null || !PLANT.test(o.grup)) ? null : ((g('retol') || 0) + (g('cartb') || 0) / 12 + ((g('carta') || 0) + (g('crypxb') || 0)) / 24) * 1e6,
     };
     const vec = KEYS.map(k => values[k]);
-    putVector('n', o.name, vec);
-    return { name: o.name, group: o.grup, kcal: g('enerc') / 4.184, p: g('protcnt'), c: g('choavldf'), f: g('fatce'), values: vec };
+    const r = { name: o.name, group: o.grup, kcal: parseFloat(o.enerc) / 4.184, p: parseFloat(o.protcnt), c: parseFloat(o.choavldf), f: parseFloat(o.fatce), values: vec };
+    putVector('n', o.name, vec, r.p);
+    return r;
   });
 })();
 
@@ -233,17 +249,29 @@ const pushCore = (name, brand, kcal, p, c, f, servings, src, micros) => {
 
 // Curated everyday foods; vitamins and minerals come from a close match in INDB or USDA (curated-micros.js).
 let curatedMatched = 0;
+let curatedScaled = 0;
 CURATED.forEach(([name, kcal, p, c, f, g, label]) => {
-  const ref = CURATED_MICROS[name];
+  const entry = CURATED_MICROS[name];
   let values = KEYS.map(() => null);
-  if (ref) {
+  if (entry) {
+    // An entry is 'src:name', or ['src:name', { key: value or null }] to replace values the match gets wrong for this food.
+    const [ref, override = {}] = Array.isArray(entry) ? entry : [entry];
     const [rsrc, ...rest] = ref.split(':');
     const hit = vectors[rsrc]?.[rest.join(':').toLowerCase()];
     if (!hit) throw new Error(`curated-micros: no match for ${name} -> ${ref}`);
-    values = hit;
+    // The match is often wetter or drier than the dish (dry dal vs cooked, a 200 kcal recipe roti vs a 235 kcal one), so its
+    // per-100 g values are scaled by the protein ratio: a stand-in for how much of the same food is in 100 g. Added sugar or
+    // fat don't change protein, so lassi doesn't get double the calcium of curd. Foods with almost no protein aren't scaled.
+    const scale = p >= 1.5 && hit.protein >= 1.5 ? Math.min(3, Math.max(1 / 3, p / hit.protein)) : 1;
+    if (Math.abs(scale - 1) > 0.05) curatedScaled++;
+    values = hit.values.map(x => x == null ? null : x * scale);
+    for (const [k, v] of Object.entries(override)) {
+      if (!KEYS.includes(k)) throw new Error(`curated-micros: unknown key ${k} for ${name}`);
+      values[KEYS.indexOf(k)] = v;
+    }
     curatedMatched++;
   }
-  pushCore(name, '', kcal, p, c, f, serving(label, g), 'c', encode(values, groupFor(name), name));
+  pushCore(name, '', kcal, p, c, f, serving(label, g) || '', 'c', encode(values, groupFor(name), name));
 });
 const curatedCount = core.length;
 
@@ -255,6 +283,12 @@ for (const { cell, text, values } of indbRows) {
   // Recipes for deep-fried dishes count all the frying oil as eaten, giving impossible values like 668 kcal for dahi vada.
   const naturallyFatty = /ghee|butter|oil|nut|almond|cashew|peanut|chikki|coconut|seed|pickle|mayonnaise|chocolate|halwa|ladoo|laddu|burfi|barfi|mathri|murukku|chips|dressing|sauce/i;
   if (kcal >= 450 && f * 9 / kcal > 0.55 && !naturallyFatty.test(name)) continue;
+  // The same frying-oil error in dishes under 450 kcal: nearly all the energy from fat with little else left
+  // (vegetable samosa 443 kcal with 42 g fat and 2 g protein, vegetable yakhni 406 kcal, 805 kcal mathri).
+  const fatIsTheFood = /dressing|tartare|mayonnaise|baghar|tadka|pickle|achaar|achar|aachar|chutney|\bdip\b|^(white|cheese|mustard|mushroom) sauce/i;
+  if (!fatIsTheFood.test(name) && (f * 9 / kcal > 0.86 || (f > 28 && p + c < 20) || f > 45)) continue;
+  // A few cooked dishes are given per 100 g of dry ingredients (plain dosa 381 kcal, khichdi 383 kcal, tamarind rice 373 kcal).
+  if (kcal > 280 && /\b(dosa|pesarattu|khichdi|khichri|porridge|upma|tamarind rice|maa chaane ki dal|namkeen daliya)\b/i.test(name) && !/premix|powder|mix\b/i.test(name)) continue;
   const unitKcal = cell('unit_serving_energy_kcal'), unit = tidy(text('servings_unit'));
   const g = unit && unitKcal > 0 && kcal > 0 ? unitKcal / kcal * 100 : 0;
   const servings = g >= 10 && g <= 700 ? serving(`1 ${unit}`, g) : '';
@@ -302,50 +336,152 @@ for (const { src, foods } of usdaFiles) {
 }
 fs.writeFileSync(path.join(outDir, 'core.txt'), core.join('\n') + '\n');
 
-// Open Food Facts packaged foods: every Indian product, then the most scanned products worldwide.
-const titleCase = s => (s === s.toUpperCase() && /[A-Z]{3}/.test(s) ? s.toLowerCase().replace(/(^|[\s(/-])([a-z])/g, (m, a, b) => a + b.toUpperCase()) : s);
+// Open Food Facts packaged foods: Indian products first (tagged as sold in India, then other India-linked products),
+// then the most scanned products worldwide. Crowd-entered, so each row is checked before it goes in.
+const titleCase = s => (s === s.toUpperCase() && /[A-Z]{3}/.test(s) ? s.toLowerCase().replace(/(^|[\s(/-])([a-z])/g, (m, a, b) => a + b.toUpperCase())
+  : s === s.toLowerCase() && /[a-z]{3}/.test(s) ? s.replace(/(^|[\s(/-])([a-z])/g, (m, a, b) => a + b.toUpperCase()) : s);
 const MIN_SCANS_WORLD = Number(process.env.MIN_SCANS_WORLD || 3);
 const MIN_SCANS_WEST = Number(process.env.MIN_SCANS_WEST || 1);
-const india = [], world = [];
-let offWithLabelMicros = 0;
-for await (const line of readline.createInterface({ input: fs.createReadStream(offPath), crlfDelay: Infinity })) {
-  const [code, rawName, rawBrand, kcal, p, c, f, servingG, servingLabel, scans, isIndia, isWest, micros = '', pnns = ''] = line.split('\t');
-  const n = Number(scans);
-  if (isIndia !== '1' && n < MIN_SCANS_WORLD && !(isWest === '1' && n >= MIN_SCANS_WEST)) continue;
-  const name = titleCase(rawName), brand = titleCase(rawBrand);
-  const k = key(name, brand);
-  if (seen.has(k)) continue;
-  seen.add(k);
-  const label = Object.fromEntries(micros.split(',').filter(Boolean).map(kv => { const [mk, mv] = kv.split('='); return [mk, Number(mv)]; }));
-  // Labels often print only sodium; a printed 0 for fibre or a vitamin is kept as 0.
-  const values = KEYS.map(mk => label[mk] ?? null);
-  if (values.some((x, i) => x != null && KEYS[i] !== 'na')) offWithLabelMicros++;
-  const s = Number(servingG) > 0 ? serving(servingLabel || `${servingG} g`, Number(servingG)) : '';
-  const text = row(name, brand, Number(kcal), Number(p), Number(c), Number(f), s, 'o', isIndia === '1' && /^\d{8,14}$/.test(code) ? code : '', encode(values, groupFor(name, pnns), name));
-  (isIndia === '1' ? india : world).push([n, text]);
-}
-const sorted = a => a.sort((x, y) => y[0] - x[0]).map(x => x[1]);
-fs.writeFileSync(path.join(outDir, 'india.txt'), sorted(india).join('\n') + '\n');
 
-// Split the world list so a phone can load it piece by piece, most-scanned first.
-const worldRows = sorted(world);
-const PART = 60000;
-const parts = [];
-for (const old of fs.readdirSync(outDir)) if (/^world-\d+\.txt$/.test(old)) fs.unlinkSync(path.join(outDir, old));
-for (let i = 0; i < worldRows.length; i += PART) {
-  const name = `world-${parts.length + 1}.txt`;
-  fs.writeFileSync(path.join(outDir, name), worldRows.slice(i, i + PART).join('\n') + '\n');
-  parts.push(name);
+// Per-serving or per-pack figures typed into the per-100 g boxes: these foods can't physically be that light.
+// A slip shrinks every number by the same factor, so the macros keep the food's usual shape (nuts stay mostly fat,
+// whey mostly protein). The shape test keeps real products that merely share the name: almond milk, Magnum Almond,
+// ready-to-drink whey, potato "chips" as in fries.
+const share = (x, p, c, f) => (p + c + f > 0 ? x / (p + c + f) : 1);
+const SLIPS = [
+  ['oil or ghee under 700 kcal', 700, /\b(ghee|(sunflower|mustard|groundnut|peanut|olive|coconut|rice bran|soyabean|soybean|sesame|gingelly|til|vegetable|cooking|canola|palm|cottonseed|safflower|corn|refined|edible) oil)\b/i, /\b(spread|margarine|light|lite|(?<!(ghee|clarified).*)butter|mayo|mayonnaise|dressing|spray|in oil|with|tuna|sardines?|fish|chips|biscuits?|cookies?|rice|roti|paratha|sweets?|ladd?oo|halwa|mysore pak)\b/i, (p, c, f) => share(f, p, c, f) > 0.9],
+  ['nuts under 450 kcal', 450, /^([\w']+\s){0,2}(almonds?|badam|cashews?( nuts?)?|kaju|walnuts?( kernels?)?|akhrot|pistachios?|pista|peanuts?|groundnuts?|hazelnuts?|pecans?|macadamias?)$/i, /\b(inshell|in shell|shell|milk|drink|beverage|butter|ice cream|cream|chocolate|bar|cookies?)\b/i, (p, c, f) => share(f, p, c, f) > 0.45],
+  ['sugar or honey under 250 kcal', 250, /^((pure|raw|organic|natural|white|brown|cane|wild|forest|multiflora)\s)*(sugar|honey|jaggery|gur|shakkar|khand)$/i, null, (p, c, f) => share(c, p, c, f) > 0.9],
+  ['biscuits under 280 kcal', 280, /\b(biscuits?|cookies?|crackers?|rusks?)\b/i, /\b(mix|dough|cake|ice cream|pudding|shake|drink|milk|spread|sauce|gravy|dog|cat|pet|tea|dessert|d[ée]lice)\b/i, (p, c, f) => share(c, p, c, f) > 0.5],
+  ['chips or namkeen under 300 kcal', 300, /\b(chips|crisps|namkeen|bhujia|mixture|wafers?|sev|chivda|chiwda|nachos|kurkure)\b/i, /\b(fresh|apple|fruit|salsa|dip|sauce|frozen|oven|fries|fish|meal|cookie|chocolate chips?|choco chips?|pickles?|dill|gherkins?|pan[ée]e?|breaded|nuggets|ice cream|cone|kulfi|sundae)\b/i, (p, c, f) => share(f, p, c, f) >= 0.2],
+  ['flour under 250 kcal', 250, /^((whole|chakki|fresh|organic|multigrain|wheat|gram|rice|ragi|jowar|bajra|maize|corn)\s)*(atta|flour|besan|maida|suji|sooji|rava|semolina)$/i, /\b(pudding|ambrosia|dessert|ready)\b/i, (p, c, f) => share(c, p, c, f) > 0.55],
+  ['protein powder under 200 kcal', 200, /\b(whey|mass gainer|protein powder|isolate)\b/i, /\b(shake|drink|bar|water|milk|ready|rtd|cookie|wafer|coffee|bites?|chips|yog(h)?urt|curd|lassi|ice cream|cereal|bread)\b/i, (p, c, f) => share(p, p, c, f) > 0.5],
+];
+const servingSlip = (name, brand, kcal, p, c, f) => SLIPS.find(([, min, re, not, shape]) => kcal < min && re.test(name) && !(not && not.test(`${name} ${brand}`)) && shape(p, c, f))?.[0];
+
+// Values above these per 100 g are almost always a unit slip (mg typed as g, IU as µg) for foods that aren't
+// supplements, salt or the few naturally extreme foods each line allows. The value is dropped, not the food.
+// Salt itself, stock cubes, tastemakers and chaat masala really are 15-39 g sodium per 100 g; other savoury foods stay under 12 g,
+// and sweet or dairy foods under 2.5 g unless they're one of the salty kinds.
+const VERY_SALTY = /\b(salt|namak|stock|bouillon|cubes?|seasoning|tastemaker|masala|soy sauce|fish sauce|soup|pickle|achaa?r|papad|miso)\b/i;
+const SALTY = /\b(salt|namak|stock|bouillon|cubes?|seasoning|masala|tastemaker|soy sauce|fish sauce|powder|mix|premix|papad|pickle|achaa?r|spice|chutney|ketchup|sauce|miso|olives?|anchov|cured|salted|dried fish|soup|noodles|ramen|pasta sauce|gravy|cheese|feta|butter)\b/i;
+const SUPPLEMENT = /\b(supplement|tablets?|capsules?|softgels?|multivit|vitamins?|premix|fortif|gummies|effervescent|sachet|drops)\b/i;
+const MICRO_LIMITS = {
+  na: [(g, n) => (VERY_SALTY.test(n) ? 39400 : ['milk', 'chocolate', 'fruit', 'juice', 'beverages', 'plantmilk', 'sweets', 'alcohol', 'eggs', 'sweetbake', 'cereal'].includes(g) && !SALTY.test(n) ? 2500 : 12000)],
+  va: [() => 6000, /\b(liver|cod|fish oil|carrot powder|red palm)\b/i],
+  b12: [() => 50, /\b(yeast|marmite|vegemite|liver|clams?)\b/i],
+  se: [() => 300, /\b(brazil|yeast)\b/i],
+  vd: [() => 60, /\b(mushrooms?|cod|liver|fish oil)\b/i],
+  fol: [() => 1500, /\b(yeast|marmite|vegemite)\b/i],
+  fe: [() => 60, /\b(spice|masala|jeera|cumin|thyme|basil|oregano|herbs?|mint|pudina|spirulina|cereal|flakes|haldi|turmeric|seasoning|powder|dried|amchur|kasuri|methi|bran)\b/i],
+  ca: [() => 2500, /\b(powder|calcium)\b/i],
+  vk: [() => 1700, /\b(dried|herbs?|basil|sage|parsley|matcha|greens|kale|moringa)\b/i],
+  vc: [() => 2000, /\b(acerola|amla|camu|powder|vitamin c)\b/i],
+  k: [() => 5000, /\b(powder|salt|seasoning|coffee|cocoa|spice|dried|tea|cream of tartar)\b/i],
+  mg: [() => 800, /\b(seeds?|bran|cocoa|powder|spirulina)\b/i],
+  zn: [() => 30, /\b(oysters?)\b/i],
+  b1: [() => 10, /\b(yeast|powder|horlicks|bournvita|complan|boost|drink mix|malt)\b/i],
+  b2: [() => 10, /\b(yeast|powder|horlicks|bournvita|complan|boost|drink mix|malt|marmite)\b/i],
+  b6: [() => 10, /\b(yeast|powder|horlicks|bournvita|complan|boost|drink mix|malt)\b/i],
+  b3: [() => 100, /\b(yeast|powder|marmite|vegemite)\b/i],
+  ve: [() => 100, /\b(oil|wheat germ)\b/i],
+  o3: [() => 5000, /\b(oil|omega|krill|cod liver)\b/i],
+  ala: [() => 25, /\b(oil|flax|linseed|alsi|chia)\b/i],
+  fib: [() => 50, /\b(psyllium|isabgol|husk|bran|inulin|fib(re|er) (supplement|powder))\b/i],
+};
+const microDrops = {};
+const checkMicros = (values, group, name) => {
+  if (SUPPLEMENT.test(name)) return values;
+  return values.map((x, i) => {
+    const lim = MICRO_LIMITS[KEYS[i]];
+    if (x == null || !lim) return x;
+    const [cap, allow] = lim;
+    if (x > cap(group, name) && !(allow && allow.test(name))) { microDrops[KEYS[i]] = (microDrops[KEYS[i]] || 0) + 1; return null; }
+    return x;
+  });
+};
+
+// Brand spellings: "Haldiram's", "HALDIRAMS", "haldiram" become one brand, written the way most products write it.
+const brandKey = b => b.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '').replace(/s$/, '');
+const offRows = [];
+const spellings = new Map();
+for await (const line of readline.createInterface({ input: fs.createReadStream(offPath), crlfDelay: Infinity })) {
+  const [code, rawName, rawBrand, kcal, p, c, f, servingG, servingLabel, scans, tier, isWest, micros = '', pnns = ''] = line.split('\t');
+  const n = Number(scans);
+  if (tier === '0' && n < MIN_SCANS_WORLD && !(isWest === '1' && n >= MIN_SCANS_WEST)) continue;
+  offRows.push({ code, rawName, rawBrand, kcal: Number(kcal), p: Math.min(100, Number(p)), c: Math.min(100, Number(c)), f: Math.min(100, Number(f)), servingG: Number(servingG), servingLabel, n, tier: Number(tier), micros, pnns });
+  if (rawBrand) {
+    const k = brandKey(rawBrand);
+    if (k.length >= 3) { const m = spellings.get(k) || new Map(); m.set(rawBrand, (m.get(rawBrand) || 0) + 1); spellings.set(k, m); }
+  }
 }
+const brandName = new Map();
+const mixedCase = x => x !== x.toUpperCase() && x !== x.toLowerCase();
+for (const [k, m] of spellings) {
+  // The commonest spelling, except that a short ALL-CAPS acronym stays (MTR, ITC, MDH) and otherwise a mixed-case
+  // spelling ("Haldiram's") beats SHOUTING or lower case when it's reasonably common.
+  const list = [...m].sort((a, b) => b[1] - a[1]);
+  const [top, n] = list[0];
+  const mixed = list.find(([x, c]) => mixedCase(x) && c * 3 >= n);
+  const best = top === top.toUpperCase() && top.replace(/[^A-Za-z]/g, '').length <= 4 ? top : mixedCase(top) ? top : mixed ? mixed[0] : top;
+  brandName.set(k, titleCase(best));
+}
+
+const india = [], indiaLinked = [], world = [];
+const dropped = {};
+const seenCodes = new Set();
+let offWithLabelMicros = 0;
+// India first, so a product both tagged India and sold elsewhere lands in the India file; most scanned first within each.
+offRows.sort((a, b) => (a.tier || 9) - (b.tier || 9) || b.n - a.n);
+for (const r of offRows) {
+  const name = tidy(titleCase(r.rawName));
+  const brand = r.rawBrand ? tidy(brandName.get(brandKey(r.rawBrand)) || titleCase(r.rawBrand)) : '';
+  const slip = servingSlip(name, brand, r.kcal, r.p, r.c, r.f);
+  if (slip) { dropped[slip] = (dropped[slip] || 0) + 1; continue; }
+  const k = key(name, brand);
+  if (seen.has(k)) { dropped['same name and brand'] = (dropped['same name and brand'] || 0) + 1; continue; }
+  if (/^\d{8,14}$/.test(r.code)) {
+    if (seenCodes.has(r.code)) { dropped['same barcode'] = (dropped['same barcode'] || 0) + 1; continue; }
+    seenCodes.add(r.code);
+  }
+  seen.add(k);
+  const label = Object.fromEntries(r.micros.split(',').filter(Boolean).map(kv => { const [mk, mv] = kv.split('='); return [mk, Number(mv)]; }));
+  const group = groupFor(name, r.pnns);
+  // Labels often print only sodium; a printed 0 for fibre or a vitamin is kept as 0.
+  const values = checkMicros(KEYS.map(mk => label[mk] ?? null), group, `${name} ${brand}`);
+  if (values.some((x, i) => x != null && KEYS[i] !== 'na')) offWithLabelMicros++;
+  const s = r.servingG > 0 ? serving(r.servingLabel || `${r.servingG} g`, r.servingG) || '' : '';
+  // Indian products keep their barcode so a scan finds them offline.
+  const code = r.tier && /^\d{8,14}$/.test(r.code) ? r.code : '';
+  const text = row(name, brand, r.kcal, r.p, r.c, r.f, s, 'o', code, encode(values, group, name));
+  (r.tier === 1 ? india : r.tier === 2 ? indiaLinked : world).push(text);
+}
+offRows.length = 0;
+
+// Split big lists so a phone can load them piece by piece, most-scanned first.
+for (const old of fs.readdirSync(outDir)) if (/^(world|india-brands)(-\d+)?\.txt$/.test(old)) fs.unlinkSync(path.join(outDir, old));
+const writeParts = (rows, base, size) => {
+  const names = [];
+  for (let i = 0; i < rows.length; i += size) {
+    const name = rows.length > size ? `${base}-${names.length + 1}.txt` : `${base}.txt`;
+    fs.writeFileSync(path.join(outDir, name), rows.slice(i, i + size).join('\n') + '\n');
+    names.push(name);
+  }
+  return names;
+};
+fs.writeFileSync(path.join(outDir, 'india.txt'), india.join('\n') + '\n');
+const brandParts = writeParts(indiaLinked, 'india-brands', 60000);
+const parts = writeParts(world, 'world', 60000);
 
 const meta = {
-  built: new Date().toISOString().slice(0, 10),
-  files: ['core.txt', 'india.txt', ...parts],
-  counts: { curated: curatedCount, indb: indbCount, ifct: ifctCount, usdaSurvey: usdaCounts.s, usdaFoundation: usdaCounts.f, usdaLegacy: usdaCounts.l, offIndia: india.length, offWorld: world.length },
-  total: core.length + india.length + world.length,
+  // Date and time: food file URLs carry this, so a second build on the same day still reaches phones.
+  built: new Date().toISOString().slice(0, 16).replace(/[T:]/g, '-'),
+  files: ['core.txt', 'india.txt', ...brandParts, ...parts],
+  counts: { curated: curatedCount, indb: indbCount, ifct: ifctCount, usdaSurvey: usdaCounts.s, usdaFoundation: usdaCounts.f, usdaLegacy: usdaCounts.l, offIndia: india.length, offIndiaLinked: indiaLinked.length, offWorld: world.length },
+  total: core.length + india.length + indiaLinked.length + world.length,
   microKeys: KEYS,
   microGroups,
 };
 fs.writeFileSync(path.join(outDir, 'meta.json'), JSON.stringify(meta, null, 1));
 fs.writeFileSync(path.join(outDir, 'synonyms.json'), JSON.stringify(SYNONYMS));
-console.log({ ...meta, microGroups: microGroups.map(g => `${g.name}:${g.n}`).join(' '), curatedMatched, offWithLabelMicros });
+console.log({ ...meta, microGroups: microGroups.map(g => `${g.name}:${g.n}`).join(' '), curatedMatched, curatedScaled, offWithLabelMicros, dropped, microDrops });

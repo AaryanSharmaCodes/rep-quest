@@ -159,6 +159,8 @@ h3 { font-size: 15px; font-weight: 600; line-height: 1.3; }
 .xp-track { flex: 1; height: 4px; background: var(--track); overflow: hidden; }
 .xp-track i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-hi)); box-shadow: var(--glow-sm); }
 .q-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+/* Short header links ("Edit", "Add") get a wider tap area without moving the text. */
+.q-head .link, .session-head .link { min-width: 44px; padding-left: 12px; justify-content: flex-end; flex: none; }
 .q-count { font-size: 14px; color: var(--accent-hi); font-variant-numeric: tabular-nums; }
 .quests { display: grid; gap: 9px; margin-top: 10px; }
 .quest { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px; width: 100%; min-height: 70px; padding: 11px 10px 11px var(--pad); overflow: hidden; }
@@ -177,6 +179,8 @@ h3 { font-size: 15px; font-weight: 600; line-height: 1.3; }
 @keyframes cleared { 0% { transform: scale(.97); } 35% { transform: scale(1.01); box-shadow: var(--glow-burst); } 100% { transform: none; } }
 .all-clear { margin-top: 10px; padding: 18px 0; text-align: center; font: 500 18px/1.3 var(--display); letter-spacing: .03em; color: var(--accent-hi); text-shadow: var(--glow-text); }
 .hero { margin-bottom: 8px; }
+/* A framed card right above the hero (Micros: supplements, then the score) needs a gap, or the two frames touch. */
+.block.card + .hero { margin-top: 12px; }
 .big-num { line-height: 1; }
 .big-num b { font: 700 54px/1.05 var(--display); text-shadow: var(--glow-text); }
 .big-num small { font-size: 15px; color: var(--dim); font-family: var(--text); font-weight: 400; }
@@ -281,6 +285,8 @@ h3 { font-size: 15px; font-weight: 600; line-height: 1.3; }
 .ex-note { font-size: 13px; color: var(--dim); }
 .work-foot { margin-top: 10px; text-align: center; }
 #rest { position: fixed; z-index: 6; left: 12px; right: 12px; bottom: calc(var(--tabs) + 6px); max-width: 656px; margin: 0 auto; height: 56px; border-radius: var(--r); background: var(--pop-bg); display: flex; align-items: center; gap: 2px; padding: 0 6px; overflow: hidden; box-shadow: 0 6px 24px rgba(0, 0, 0, .5); }
+/* While the rest timer floats above the tabs, the page needs that much more room at the bottom, or the last row (Discard workout) sits under it. */
+body:has(#rest:not([hidden])) #app { padding-bottom: calc(var(--tabs) + 28px + 62px); }
 .rest-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--surf-2); }
 .rest-t { position: relative; flex: 1; text-align: center; font: 600 28px/1 var(--text); font-variant-numeric: tabular-nums; }
 .rest-b { position: relative; min-width: 48px; height: 44px; text-align: center; font-size: 14px; font-weight: 600; color: var(--dim); }
@@ -327,6 +333,8 @@ h3 { font-size: 15px; font-weight: 600; line-height: 1.3; }
 .plain select, .form select, .pick { display: block; width: 100%; height: 46px; padding: 0 10px; margin-top: 4px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surf); color: var(--ink); font-size: 16px; -webkit-appearance: none; appearance: none; }
 .pick option, .form select option, .plain select option { background: var(--sheet); }
 .pick.inline { width: 58%; height: 38px; margin: 0; }
+/* appearance:none removes the native arrow, so a select looked like a text box. A small caret drawn in the theme's dim colour. */
+.plain select, .form select, .pick { padding-right: 30px; background-image: linear-gradient(45deg, transparent 50%, var(--dim) 50%), linear-gradient(135deg, var(--dim) 50%, transparent 50%); background-position: calc(100% - 17px) 52%, calc(100% - 12px) 52%; background-size: 5px 5px; background-repeat: no-repeat; text-overflow: ellipsis; }
 
 /* Progress */
 .legend { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--dim); margin-top: 6px; flex-wrap: wrap; }
@@ -420,7 +428,8 @@ h3 { font-size: 15px; font-weight: 600; line-height: 1.3; }
 .scrim { animation: fade .2s ease both; }
 @keyframes slide { from { transform: translateY(100%); } }
 @keyframes fade { from { opacity: 0; } }
-.sh-head { display: flex; align-items: center; gap: 4px; min-height: 48px; margin-bottom: 4px; position: sticky; top: -8px; background: var(--sheet); z-index: 3; }
+/* The sticky head spans the panel's side padding too, so rows that bleed into it (edit list) don't peek out beside it when scrolled. */
+.sh-head { display: flex; align-items: center; gap: 4px; min-height: 48px; margin: 0 -18px 4px; padding: 0 18px; position: sticky; top: -8px; background: var(--sheet); z-index: 3; }
 .sh-title { flex: 1; min-width: 0; padding: 6px 0; }
 .sh-head .ic-btn:first-child { margin-left: -12px; }
 .sh-head .ic-btn:last-child { margin-right: -12px; }
@@ -430,8 +439,13 @@ h3 { font-size: 15px; font-weight: 600; line-height: 1.3; }
 .form > label, .two label, .three label { display: block; font-size: 13px; color: var(--dim); }
 .form input:not(.sw), .form textarea { display: block; width: 100%; min-height: 46px; padding: 10px 11px; margin-top: 4px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surf); color: var(--ink); font-size: 16px; }
 .form input:not(.sw):focus, .form textarea:focus { outline: 0; border-color: var(--accent-hi); }
-.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.three { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; align-items: end; }
+/* iOS Safari gives time/date inputs an intrinsic min width and its own chrome, so in a two-column row they spill into the next box. Reset both so they fill their column like any other field. */
+input[type=time], input[type=date] { -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; box-sizing: border-box; }
+.form input[type=time], .form input[type=date] { display: block; width: 100%; text-align: left; line-height: 1.3; }
+input[type=time]::-webkit-date-and-time-value, input[type=date]::-webkit-date-and-time-value { text-align: left; margin: 0; min-height: 1.3em; }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.three { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; align-items: end; }
+.two > *, .three > * { min-width: 0; }
 .row-check { display: flex !important; flex-direction: row-reverse; justify-content: space-between; align-items: center; color: var(--ink) !important; font-size: 15px !important; min-height: 40px; }
 .choice { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; margin-bottom: 8px; }
 .choice button { min-height: 46px; padding: 6px 7px; border: 1px solid var(--line); border-radius: var(--r-sm); text-align: center; font-size: 13px; line-height: 1.2; font-weight: 500; }
@@ -472,7 +486,11 @@ h3 { font-size: 15px; font-weight: 600; line-height: 1.3; }
 .papers em { color: var(--dim); }
 .papers p { margin-top: 2px; }
 .howto { margin: 6px 0 10px; }
-.howto summary { font-weight: 600; min-height: 36px; display: flex; align-items: center; cursor: pointer; }
+.howto summary { font-weight: 600; min-height: 44px; display: flex; align-items: center; cursor: pointer; list-style: none; }
+/* display:flex drops the browser's disclosure triangle, so draw a small chevron to show it opens. */
+.howto summary::-webkit-details-marker { display: none; }
+.howto summary::after { content: ''; width: 7px; height: 7px; margin: -4px 0 0 10px; border-right: 1.8px solid var(--dim); border-bottom: 1.8px solid var(--dim); transform: rotate(45deg); }
+.howto[open] summary::after { margin-top: 4px; transform: rotate(225deg); }
 .howto img { width: 100%; margin: 4px 0; }
 .howto ol { list-style: decimal; padding-left: 18px; color: var(--dim); font-size: 14px; }
 
@@ -728,6 +746,8 @@ html[data-theme=arcade] .tally dd, html[data-theme=arcade] .stats dd { font-size
 html[data-theme=arcade] .btn.solid:active { transform: translate(3px, 3px); box-shadow: 1px 1px 0 #ff3d81; }
 html[data-theme=arcade] .quest:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 #ff3d81; }
 html[data-theme=arcade] .fx-ring { border-radius: 0; }
+/* Arcade's accent yellow is too close to the supplement ochre on the Micros bars; food takes the cyan instead. */
+html[data-theme=arcade] .mi-row:not(.over) .mi-food, html[data-theme=arcade] .mi-dot.food { background: #29e6ff; }
 
 /* Gentle: Auto on a phone with Reduce Motion, or picked under You. Fades stay, nothing moves. */
 html[data-motion=gentle] *, html[data-motion=gentle] *::before, html[data-motion=gentle] *::after { animation: none !important; transition-property: opacity, color, background-color, border-color !important; }
@@ -763,7 +783,9 @@ html[data-motion=gentle] *, html[data-motion=gentle] *::before, html[data-motion
 .mi-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: -1px; margin: 0 3px 0 8px; }
 .mi-dot.food { background: var(--accent); }
 .mi-dot.supp { background: var(--carbs); }
-.mi-sources li { display: flex; justify-content: space-between; gap: 12px; }
+.mi-sources { margin: 12px 0 8px; }
+.mi-sources li { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 9px 0; }
+.mi-sources b { flex: none; }
 .supp-list { display: grid; gap: 8px; margin: 10px 0; }
 .supp { display: flex; align-items: center; gap: 12px; text-align: left; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surf); }
 .supp span { display: flex; flex-direction: column; }
@@ -772,6 +794,8 @@ html[data-motion=gentle] *, html[data-motion=gentle] *::before, html[data-motion
 .supp-tick .ic, .supp-tick svg { width: 16px; height: 16px; }
 .supp.on { border-color: var(--accent); }
 .supp.on .supp-tick { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+/* The legend dot shares the "supp" class with the supplement buttons above; keep it a dot. */
+.mi-legend .mi-dot.supp { display: inline-block; padding: 0; border: 0; border-radius: 50%; background: var(--carbs); }
 .supp-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .supp-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--surf); font-size: 14px; }
 .supp-chip svg { width: 14px; height: 14px; }
@@ -788,7 +812,7 @@ html[data-motion=gentle] *, html[data-motion=gentle] *::before, html[data-motion
 .sl-add { display: flex; gap: 8px; margin: 10px 0 6px; }
 .sl-add .btn { flex: 1; }
 .caf-add { margin: 10px 0 6px; }
-.caf-add .pill { font-size: 13px; padding: 0 10px; min-height: 34px; }
+.caf-add .pill { font-size: 13px; padding: 0 10px; min-height: 38px; }
 .tl { margin: 16px 4px 4px; }
 .tl-track { position: relative; height: 16px; border-radius: 8px; background: var(--surf-2); border: 1px solid var(--line); }
 .tl-fill { position: absolute; top: 0; bottom: 0; border-radius: 8px; background: var(--accent-hi); }
@@ -821,3 +845,17 @@ html[data-motion=gentle] *, html[data-motion=gentle] *::before, html[data-motion
 .row.col { flex-direction: column; align-items: stretch; gap: 2px; }
 .row.col em { font-size: 13px; color: var(--dim); font-style: normal; }
 .mode-seg button { font-size: 13px; }
+
+/* The "added" stamp */
+.fx-added { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 190px; max-width: calc(100vw - 48px); padding: 20px 22px 16px; border-radius: 22px; background: var(--pop-bg); border: 1px solid var(--line); box-shadow: 0 18px 50px rgba(0, 0, 0, .45); text-align: center; }
+.fx-added svg { width: 56px; height: 56px; }
+.fx-added circle, .fx-added path { fill: none; stroke: var(--accent-hi); stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 0; }
+.fx-added b { font: 700 18px var(--display); color: var(--ink); }
+.fx-added span { font-size: 13px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.ex-effort { margin: 2px 0 8px; font-size: 13px; color: var(--dim); }
+.ex-effort.fail { color: var(--warn); }
+.ex-effort.fail b { color: var(--warn); }
+.coach-row { margin-top: 14px; }
+/* On a rest day the coach row sits above the day's heading instead of below the Start button. */
+.dstrip + .coach-row { margin-top: 0; }
+.coach-row + .session-head { margin-top: 14px; }

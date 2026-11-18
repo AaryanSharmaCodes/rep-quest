@@ -61,7 +61,7 @@ function scheduleSave() { if (state) state.editedAt = Date.now(); clearTimeout(s
 function flushSave() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; writeSave(); } }
 
 /* ---------- State ---------- */
-const APP_VERSION = 29; // matches CACHE in sw.js
+const APP_VERSION = 30; // matches CACHE in sw.js
 const THEMES = [
   { id: 'game', name: 'Quest', bar: '#170e33', fx: ['#b78eff', '#dfceff', '#ffffff', '#7f5cff'], shapes: ['star', 'circle'], burst: 1 },
   { id: 'light', name: 'Minimal', bar: '#f7f7f4', fx: ['#17171a', '#8a8a8e', '#c9c9c5'], shapes: ['circle'], burst: 0.6 },
@@ -72,10 +72,13 @@ const THEMES = [
 const DEFAULT_SUPPLEMENTS = [
   { id: 'fishoil', name: 'Fish oil', detail: 'Citrus lemon, 1 softgel', kcal: 14.7, n: { o3: 750, va: 420, vd: 7.5, ve: 5 }, extra: 'EPA 450 mg, DHA 300 mg, other omega-3 45 mg' },
   { id: 'magnesium', name: 'Magnesium glycinate', detail: 'Maginova, 1 tablet', kcal: 0.25, n: { mg: 220 }, extra: '1,000 mg magnesium glycinate = 220 mg magnesium' },
-  { id: 'limcee', name: 'Limcee vitamin C', detail: '1 chewable tablet', kcal: 0, n: { vc: 500 }, extra: 'Vitamin C 500 mg' },
+  { id: 'newcee', name: 'Newcee', detail: '1 tablet: amla, vitamin C, zinc', kcal: 0.24, n: { vc: 65, zn: 13.2 }, extra: 'Amla extract 1,000 mg (10% tannins), vitamin C 65 mg, zinc 13.2 mg (from zinc gluconate 92.4 mg), ginger extract 10 mcg' },
+  { id: 'novaglow', name: 'Nova-Glow', detail: '1 tablet: glutathione, vitamin E, biotin', kcal: 0.16, n: { ve: 10 }, extra: 'L-glutathione (reduced) 500 mg, hyaluronic acid 80 mg, vitamin E 10 mg (D-alpha-tocopheryl acetate 50%), lycopene 10% 5,000 mcg, biotin 40 mcg' },
 ];
 // Raised whenever the defaults change, so saved lists pick up additions once.
-const SUPPLEMENTS_VERSION = 5;
+const SUPPLEMENTS_VERSION = 6;
+// Stopped but kept, so days it was taken still count its vitamins (Limcee replaced by Newcee + Nova-Glow, 18 Nov 2026).
+const RETIRED_SUPPLEMENTS = { 6: { limcee: '2026-11-18' } };
 // He takes 1 fish oil and 1 magnesium a day, not the 2-unit serving on the labels (fixed 15 Nov 2026).
 const RESET_SUPPLEMENTS = { 5: ['fishoil', 'magnesium'] };
 // Only supplements that add vitamins, minerals or calories belong here (removed 11 Nov 2026).
@@ -107,7 +110,7 @@ function defaultState() {
     homeChoice: {},
     deloadUntil: null,
     dismissed: {},
-    settings: { usdaKey: '', sound: true, showRir: false, showWaist: false, waistUnit: 'cm', theme: 'game', animations: true, motion: 'auto', place: 'gym', placeOn: null, homeGear: {} },
+    settings: { usdaKey: '', sound: true, showWaist: false, waistUnit: 'cm', theme: 'game', animations: true, motion: 'auto', place: 'gym', placeOn: null, homeGear: {} },
   };
 }
 
@@ -124,6 +127,10 @@ function migrate(saved) {
     // Supplements added to the defaults after a save was made join its list once.
     if ((saved.suppVersion || 1) < SUPPLEMENTS_VERSION) {
       DEFAULT_SUPPLEMENTS.forEach(x => { if (!s.supplements.some(y => y.id === x.id)) s.supplements.push(clone(x)); });
+      Object.entries(RETIRED_SUPPLEMENTS).forEach(([v, ids]) => {
+        if ((saved.suppVersion || 1) >= Number(v)) return;
+        s.supplements = s.supplements.map(x => (ids[x.id] && !x.retired ? { ...x, retired: ids[x.id] } : x));
+      });
       Object.entries(RESET_SUPPLEMENTS).forEach(([v, ids]) => {
         if ((saved.suppVersion || 1) >= Number(v)) return;
         s.supplements = s.supplements.map(x => (ids.includes(x.id) ? clone(DEFAULT_SUPPLEMENTS.find(y => y.id === x.id) || x) : x));
@@ -161,6 +168,9 @@ function migrate(saved) {
       s.kcalChangedOn = today();
       s.targetsFixed = true;
     }
+    // Reps in reserve were removed (18 Nov 2026): plan rows that used them go back to reps-then-weight.
+    (s.program?.days || []).forEach(d => d.exercises.forEach(e => { if (e.mode === 'rir') e.mode = 'double'; delete e.rirGoal; }));
+    delete s.settings.showRir;
     // He asked for every animation (15 Nov 2026): Full plays them even with the iPhone's Reduce Motion on.
     if (saved.settings?.motion == null && s.onboarded) s.settings.motion = saved.settings?.animations === false ? 'off' : 'full';
     applyCoach(s);

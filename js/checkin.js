@@ -133,7 +133,7 @@ function trainingDetail(from, to, now) {
       if (!sess) return null;
       const e = sess.exercises.find(x => x.name === name), work = e.sets.filter(isWorking);
       const hit = t.reps.every((r, i) => work[i] && work[i].r >= r && (t.w == null || work[i].w >= t.w));
-      return `- ${name}: target ${t.w ? `${t.w} kg × ` : ''}${t.reps.join(', ')} → did ${setLine(e.sets, e.unit)} ${hit ? '[HIT]' : '[MISSED]'}`;
+      return `- ${name}: target ${t.w ? `${t.w} kg × ` : ''}${t.reps.join(', ')}${t.fail ? ` (${t.fail === 'all' ? 'all sets' : 'last set'} to failure)` : ''} → did ${setLine(e.sets, e.unit)} ${hit ? '[HIT]' : '[MISSED]'}`;
     }).filter(Boolean);
     const planNames = new Set(state.program.days.flatMap(d => d.exercises.map(e => e.name)));
     const notDone = Object.keys(c.lifts).filter(n => planNames.has(n) && !state.workouts.some(w => w.date >= c.from && w.date <= to && w.exercises.some(e => e.name === n)));

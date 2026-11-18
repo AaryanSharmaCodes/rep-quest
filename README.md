@@ -8,17 +8,17 @@ The calorie coach starts after 10 weigh-ins and 4 workouts. It fits a line throu
 
 ## Data
 
-`foods/` holds about 467,000 foods, searched on the device by `food-worker.js`:
+`foods/` holds about 490,000 foods, searched on the device by `food-worker.js`:
 
 - USDA FoodData Central (SR Legacy, FNDDS, Foundation Foods), public domain
 - Indian Nutrient Databank: Vijayakumar A, Dubasi HB, Awasthi A, Jaacks LM. Development of an Indian Food Composition Database. Curr Dev Nutr, 2024. [Source repo](https://github.com/lindsayjaacks/Indian-Nutrient-Databank-INDB-)
 - Indian Food Composition Tables 2017: Longvah T, Ananthan R, Bhaskarachary K, Venkaiah K. National Institute of Nutrition (ICMR), Hyderabad. Read from the [ifct2017](https://www.npmjs.com/package/ifct2017) package.
-- Open Food Facts, © Open Food Facts contributors, under the [Open Database License](https://opendatacommons.org/licenses/odbl/1-0/). The extract in `foods/india.txt` and `foods/world-*.txt` is shared under the same licence.
+- Open Food Facts, © Open Food Facts contributors, under the [Open Database License](https://opendatacommons.org/licenses/odbl/1-0/). The extract in `foods/india.txt`, `foods/india-brands*.txt` and `foods/world-*.txt` is shared under the same licence. `india.txt` holds products tagged as sold in India; `india-brands*.txt` holds other Indian products (GS1 India 890 barcodes, Indian brands) that nobody tagged with a country.
 - About 240 everyday dishes I wrote by hand in `tools/curated-foods.js`. These are typical estimates.
 
 `exercises-db.json` comes from [free-exercise-db](https://github.com/yuhonas/free-exercise-db) (Unlicense). Barcode reading uses [html5-qrcode](https://github.com/mebjas/html5-qrcode) (Apache 2.0). Animations use spring curves from [Motion](https://github.com/motiondivision/motion) (MIT), [morphdom](https://github.com/patrick-steele-idem/morphdom) (MIT) for smooth screen updates, and [canvas-confetti](https://github.com/catdad/canvas-confetti) (ISC) for celebrations. Fonts are Cinzel, Cinzel Decorative, Silkscreen and Instrument Sans (SIL OFL).
 
-`tools/` rebuilds the food files from the original downloads.
+`tools/` rebuilds the food files from the original downloads: `filter-off.mjs` reads the Open Food Facts CSV export, then `build-foods.mjs` combines everything. Crowd-entered label data is checked on the way in: energy must agree with the macros (kJ typed as kcal is corrected), per-serving numbers typed as per 100 g are dropped, and vitamin or mineral values far beyond what the food can contain (a mg vs µg slip) are left out and estimated instead.
 
 ## Run locally
 

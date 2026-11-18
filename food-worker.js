@@ -29,9 +29,32 @@ function foldText(text) {
   });
   return low.length === text.length ? low : text.replace(/[A-Z]/g, c => c.toLowerCase());
 }
+// Search looks only at each food's name and brand, so those are copied out (lower-cased) into a smaller text,
+// one food per line in file order. starts[i] is where line i begins in that text, src[i] the line's source letter.
+// Scanning this instead of the whole file is about 3x less text, and it keeps memory lower than a lower-cased copy of everything.
 function addChunk(name, text) {
-  chunks.push({ name, raw: text, low: foldText(text), lines: (text.match(/\n/g) || []).length });
-  loaded += chunks[chunks.length - 1].lines;
+  const parts = [], rawStarts = [], srcs = [];
+  let at = 0;
+  while (at < text.length) {
+    let end = text.indexOf('\n', at);
+    if (end < 0) end = text.length;
+    if (end > at) {
+      const tab1 = text.indexOf('\t', at), tab2 = text.indexOf('\t', tab1 + 1);
+      parts.push(text.slice(at, tab2));
+      rawStarts.push(at);
+      // Columns: name, brand, kcal, p, c, f, servings, src, ... The source is the letter after the 7th tab.
+      let t = tab2;
+      for (let n = 2; n < 7; n++) t = text.indexOf('\t', t + 1);
+      srcs.push(text.charCodeAt(t + 1));
+    }
+    at = end + 1;
+  }
+  const low = foldText(parts.join('\n'));
+  const lines = parts.length;
+  const starts = new Int32Array(lines);
+  for (let i = 0, pos = 0; i < lines; i++) { starts[i] = pos; pos += parts[i].length + 1; }
+  chunks.push({ name, raw: text, low, starts, rawStarts: Int32Array.from(rawStarts), src: Uint8Array.from(srcs), lines, india: name.startsWith('india') });
+  loaded += lines;
   vocab = null;
   postMessage({ type: 'progress', loaded, total: meta.total, done: chunks.length === meta.files.length });
 }
@@ -76,19 +99,33 @@ function parseLine(line) {
     servings: servings ? servings.split('|').map(s => { const [label, g] = s.split(':'); return { label, g: +g }; }).filter(s => s.g > 0) : [],
   };
 }
-const forms = token => [token, ...(synonyms.get(token) || [])];
+// Words a typed token can match. Matching is by word start, so a form that begins with another form adds nothing
+// ("egg" already finds "eggs") and is dropped, which saves a scan. Longer plurals also match the singular
+// ("biscuits" finds "biscuit", "haldirams" finds "Haldiram's").
+const forms = token => {
+  const list = [token, ...(synonyms.get(token) || [])];
+  if (token.length >= 6 && /[^s]s$/.test(token)) { const base = token.slice(0, -1); list.push(base, ...(synonyms.get(base) || [])); }
+  return [...new Set(list)].filter((f, i, all) => !all.some((g, j) => j !== i && g.length < f.length && f.startsWith(g)));
+};
 
+// Line number of a position in a chunk's search text.
+function lineAt(starts, pos) {
+  let lo = 0, hi = starts.length - 1;
+  while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (starts[mid] <= pos) lo = mid; else hi = mid - 1; }
+  return lo;
+}
 function run(tokens, limit) {
   const groups = tokens.map(forms);
   // Anchor on the longest typed word: it has the fewest matches to walk through.
   let anchorIdx = 0;
   tokens.forEach((t, i) => { if (t.length > tokens[anchorIdx].length) anchorIdx = i; });
   const phrase = tokens.join(' ');
+  const firstForms = forms(tokens[0]);
   const best = [];
   let floor = -Infinity;
 
   for (const chunk of chunks) {
-    const { low, raw } = chunk;
+    const { low, starts, src, lines } = chunk;
     const size = low.length;
     const done = new Set();
     for (const needle of groups[anchorIdx]) {
@@ -96,18 +133,16 @@ function run(tokens, limit) {
       while (true) {
         i = wordAt(low, needle, i, size);
         if (i < 0) break;
-        const start = low.lastIndexOf('\n', i) + 1;
-        let end = low.indexOf('\n', i);
-        if (end < 0) end = size;
-        const nextFrom = i + needle.length;
-        if (done.has(start)) { i = nextFrom; continue; }
-        const tab1 = low.indexOf('\t', start);
-        const tab2 = low.indexOf('\t', tab1 + 1);
-        if (i >= tab2) { i = end + 1; continue; } // matched a serving label, not the food
-        done.add(start);
-        // Look only inside this food's name and brand. Searching the whole file from here made
-        // two-word searches crawl through megabytes for every line that matched the first word.
-        const seg = low.slice(start, tab2), nameEnd = tab1 - start;
+        const line = lineAt(starts, i);
+        const start = starts[line];
+        const end = line + 1 < lines ? starts[line + 1] - 1 : size;
+        if (done.has(line)) { i = end + 1; continue; }
+        done.add(line);
+        // Look only inside this food's name and brand. Searching on from the match made two-word
+        // searches crawl through megabytes for every line that matched the first word.
+        const seg = low.slice(start, end);
+        let nameEnd = seg.indexOf('\t');
+        if (nameEnd < 0) nameEnd = seg.length;
 
         let inName = 0, all = true, exactWords = 0;
         for (let g = 0; g < groups.length && all; g++) {
@@ -125,24 +160,18 @@ function run(tokens, limit) {
         }
         if (!all) { i = end + 1; continue; }
 
-        const nameLen = tab1 - start;
-        // Columns: name, brand, kcal, p, c, f, servings, src, code, micros. The source is the letter after the 7th tab.
-        let t = start - 1;
-        for (let n = 0; n < 7 && t < end; n++) t = raw.indexOf('\t', t + 1);
-        const srcCode = raw.charAt(t + 1);
-        let score = SRC_RANK[srcCode] ?? 10;
-        if (chunk.name === 'india.txt') score += 14;
+        let score = SRC_RANK[String.fromCharCode(src[line])] ?? 10;
+        if (chunk.india) score += 14;
         if (inName === tokens.length) score += 22;
         score += exactWords * 8;
-        const nameStart = low.slice(start, start + phrase.length);
-        if (nameStart === phrase) score += 34;
+        if (seg.startsWith(phrase)) score += 34;
         else if (wordAt(seg, phrase, 0, nameEnd) >= 0) score += 20;
-        else if (forms(tokens[0]).some(f => low.startsWith(f, start))) score += 12;
-        score -= Math.min(nameLen, 90) * 0.42;
-        score -= (start / size) * 6; // packaged files are sorted most-scanned first
+        else if (firstForms.some(f => seg.startsWith(f))) score += 12;
+        score -= Math.min(nameEnd, 90) * 0.42;
+        score -= (line / lines) * 6; // packaged files are sorted most-scanned first
 
         if (best.length < limit || score > floor) {
-          best.push({ score, line: raw.slice(start, end) });
+          best.push({ score, chunk, line });
           if (best.length > limit * 3) {
             best.sort((a, b) => b.score - a.score);
             best.length = limit;
@@ -154,7 +183,13 @@ function run(tokens, limit) {
     }
   }
   best.sort((a, b) => b.score - a.score);
-  return best.slice(0, limit).map(b => ({ ...parseLine(b.line), score: Math.round(b.score) }));
+  return best.slice(0, limit).map(b => {
+    const { raw, rawStarts } = b.chunk;
+    const from = rawStarts[b.line];
+    let to = raw.indexOf('\n', from);
+    if (to < 0) to = raw.length;
+    return { ...parseLine(raw.slice(from, to)), score: Math.round(b.score) };
+  });
 }
 
 // Typos: match against words that exist in the everyday foods.
@@ -166,6 +201,12 @@ function buildVocab() {
   });
   // Curated and government data only: crowd-sourced names contain the typos we're trying to fix.
   chunks.filter(c => c.name === 'core.txt').forEach(take);
+  // Plus words from Indian brand names on at least 3 products ("Uncle Chipps" is not a typo; a one-off misspelt brand is).
+  const brandWords = new Map();
+  chunks.filter(c => c.india).forEach(chunk => chunk.low.split('\n').forEach(line => {
+    line.slice(line.indexOf('\t') + 1).split(/[^a-z0-9]+/).forEach(w => { if (w.length >= 3) brandWords.set(w, (brandWords.get(w) || 0) + 1); });
+  }));
+  brandWords.forEach((n, w) => { if (n >= 3) vocab.add(w); });
   synonyms.forEach((_, w) => { if (!w.includes(' ')) vocab.add(w); });
 }
 function distance(a, b, limit) {

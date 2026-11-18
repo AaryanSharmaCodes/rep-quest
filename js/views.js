@@ -312,7 +312,8 @@ function viewPlan() {
       return `<li data-flip data-key="plan-${esc(e.id)}"><button data-a="openSheet" data-type="lift" data-name="${esc(e.name)}"><span class="pl-name">${esc(e.name)}</span><span class="pl-sub">${e.sets} × ${e.lo} to ${e.hi}${e.unit === 'sec' ? ' s' : ''}</span>${lastLine ? `<span class="pl-next pl-last">${lastLine}</span>` : ''}<span class="pl-next">${n.w ? `${esc(n.headline)}: ${round(n.w, 2)} kg` : esc(n.headline)}</span></button></li>`;
     }).join('')}</ol>
     ${doneToday ? '' : `<button class="btn solid wide" data-a="startDay" data-id="${day.id}">${inDeload() ? 'Start lighter session' : isHome ? 'Start home workout' : 'Start workout'}</button>${isHome ? '' : homeButton(day.id)}`}
-  ` : `<div class="session-head"><div><h2>Rest day</h2><p class="dim">Eat normally, recover.</p></div></div>
+    ${coachButton()}
+  ` : `${coachButton()}<div class="session-head"><div><h2>Rest day</h2><p class="dim">Eat normally, recover.</p></div></div>
        ${doneToday ? '' : '<button class="btn line wide" data-a="openSheet" data-type="schedule">Put a workout on this day</button>'}`;
   const showDone = doneToday && sel === new Date().getDay();
   const others = p.days.filter(d => d.id !== dayId);
@@ -321,8 +322,7 @@ function viewPlan() {
   <header class="top"><div><h1>Train</h1><button class="crumb" data-a="openSheet" data-type="programs">${esc(p.name)} ${i('next')}</button></div></header>
   ${inDeload() ? `<p class="banner">Lighter week until ${shortDate(state.deloadUntil)}: half the sets, 10% less weight. <button class="link strong" data-a="endDeload">End it</button></p>` : ''}
   <div class="dstrip">${strip}</div>
-  ${coachCard()}
-  ${showDone ? doneCard(trainedToday) : `${isHome && !doneToday && day ? homeBanner(day.id) : ''}${body}`}
+  ${showDone ? `${doneCard(trainedToday)}${coachButton()}` : `${isHome && !doneToday && day ? homeBanner(day.id) : ''}${body}`}
   ${`<section class="block"><h2>${doneToday ? 'Do another workout' : 'Train something else'}</h2>
     <div class="pills">${(doneToday ? p.days : others).map(d => `<button class="pill" data-a="openSheet" data-type="startChoice" data-id="${d.id}">${esc(d.name)}</button>`).join('')}<button class="pill" data-a="startEmpty">Empty workout</button></div></section>`}
   <section class="block"><h2>Cardio</h2>
@@ -348,12 +348,19 @@ function viewActive() {
     <button class="link danger" data-a="cancelWorkout">Discard workout</button>
   </div>`;
 }
+// Every set stops about 2 reps short. When the coach wants failure, it says exactly which sets.
+function effortLine(e) {
+  // The failure call holds for the whole coached week, not just the first session.
+  const c = state.coach, f = c && daysBetween(c.from, today()) <= 13 ? c.lifts?.[e.name]?.fail : null;
+  if (f === 'all') return '<p class="ex-effort fail">Coach: <b>every set to failure</b>. Stop only when you can\'t do another clean rep.</p>';
+  if (f === 'last') return '<p class="ex-effort fail">Coach: <b>last set to failure</b>. The others stop with about 2 reps left.</p>';
+  return '<p class="ex-effort">Stop each set with about 2 reps left.</p>';
+}
 function exerciseBlock(e, ei) {
   const hist = exerciseHistory(state.workouts, e.name, 6);
   const last = hist[0];
   const n = nextFor(e, hist);
   const chosen = e.chosen || n.chosen;
-  const showRir = state.settings.showRir || e.mode === 'rir';
   const kg = showKg(e), sec = e.unit === 'sec';
   const prevWork = last ? last.sets.filter(isWorking) : [];
   let workingIndex = 0;
@@ -370,7 +377,6 @@ function exerciseBlock(e, ei) {
       <td class="prev${s.done && prev && isWorking(s) && setScore({ w: Number(s.w) || 0, r: Number(s.r) || 0 }) > setScore(prev) + 0.001 ? ' beat' : ''}">${prev ? (prev.w ? `${round(prev.w, 2)} × ${prev.r}` : kg ? `BW × ${prev.r}` : `${prev.r}${sec ? ' s' : ''}`) : ''}</td>
       ${kg ? `<td><input inputmode="decimal" enterkeyhint="next" aria-label="Weight" value="${esc(s.w)}" placeholder="${hintW === 0 ? '' : hintW}" data-f="set" data-i="${ei}" data-j="${si}" data-k="w"></td>` : ''}
       <td><input inputmode="numeric" enterkeyhint="done" aria-label="${unitWord(e)}" value="${esc(s.r)}" placeholder="${hintR}" data-f="set" data-i="${ei}" data-j="${si}" data-k="r"></td>
-      ${showRir ? `<td><input inputmode="numeric" aria-label="Reps in reserve" value="${esc(s.rir ?? '')}" placeholder="${e.rirGoal ?? 2}" data-f="set" data-i="${ei}" data-j="${si}" data-k="rir"></td>` : ''}
       <td><button class="tick${s.done ? ' on' : ''}" data-a="toggleSet" data-i="${ei}" data-j="${si}" aria-label="Mark set done" aria-pressed="${!!s.done}">${ICON.tick}</button></td>
     </tr>`;
   }).join('');
@@ -386,8 +392,9 @@ function exerciseBlock(e, ei) {
     <p class="ex-sub">${repRange(e)}${e.swappedFrom ? `, in place of ${esc(e.swappedFrom)}` : ''}${e.superset ? ', superset with next' : ''}</p>
     ${last ? `<p class="ex-last"><span>Last time</span> <b>${esc(lastTimeText(last.sets, e.unit))}</b> <em>${daysAgo(last.date)}</em></p>` : ''}
     <p class="ex-next"><b>${esc(n.headline)}.</b> ${esc(n.why)}${n.stalled ? ' <em>Stalled for 4 sessions. A swap may help.</em>' : ''}</p>
+    ${effortLine(e)}
     ${options}
-    <table class="sets${kg ? '' : ' no-kg'}"><thead><tr><th>Set</th><th>Last</th>${kg ? '<th>kg</th>' : ''}<th>${sec ? 'Sec' : 'Reps'}</th>${showRir ? '<th>RIR</th>' : ''}<th></th></tr></thead><tbody>${rows}</tbody></table>
+    <table class="sets${kg ? '' : ' no-kg'}"><thead><tr><th>Set</th><th>Last</th>${kg ? '<th>kg</th>' : ''}<th>${sec ? 'Sec' : 'Reps'}</th><th></th></tr></thead><tbody>${rows}</tbody></table>
     <div class="ex-foot"><button class="link" data-a="addSet" data-i="${ei}">${i('plus')} Add set</button>${e.sets.length ? `<button class="link" data-a="dropSet" data-i="${ei}">Remove set</button>` : ''}${isBodyweight(e) && !e.sets.some(s => Number(s.w) > 0) ? `<button class="link" data-a="toggleLoad" data-i="${ei}">${e.loaded ? 'Bodyweight only' : 'Add weight'}</button>` : ''}${e.note ? `<span class="ex-note">${esc(e.note)}</span>` : ''}</div>
   </article>`;
 }
@@ -597,7 +604,6 @@ function viewYou() {
   </ul></section>
   <section class="block"><h2>Options</h2><ul class="rows">
     ${isInstalled() ? '' : '<li><button class="row" data-a="openSheet" data-type="installGuide"><span>Add to your Home Screen</span></button></li>'}
-    <li><label class="row"><span>Log reps in reserve</span><input type="checkbox" class="sw" data-f="setting" data-k="showRir" ${state.settings.showRir ? 'checked' : ''}></label></li>
     <li><div class="row col"><span>Animations</span>
       <div class="seg mode-seg">${[['full', 'Full'], ['auto', 'Like iPhone'], ['gentle', 'Gentle'], ['off', 'Off']].map(([m, l]) => `<button class="${Motion.mode() === m ? 'on' : ''}" data-a="motionMode" data-v="${m}">${l}</button>`).join('')}</div>
       ${Motion.phoneReduces() ? '<em>Your iPhone has Reduce Motion on. Full plays every animation anyway.</em>' : ''}</div></li>

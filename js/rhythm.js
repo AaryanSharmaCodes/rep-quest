@@ -223,7 +223,7 @@ function rhythmWeek(days) {
 }
 
 /* ---------- Sheets, actions and fields (wired up in sheets.js and app.js) ---------- */
-Object.assign(SHEETS, { sleep: sleepSheet, caffeine: caffeineSheet });
+Object.assign(SHEETS, { sleep: sleepSheet, caffeine: caffeineSheet }, COACH_SHEETS);
 const RHYTHM_ACTIONS = {
   sleepKind(d) { const s = ui.sheet; s.kind = d.v; Object.assign(s, sleepDefaults(s.k || today(), d.v)); render(); },
   sleepStep(d) { setSleepTime(d.k, ui.sheet[d.k] + Number(d.by)); },

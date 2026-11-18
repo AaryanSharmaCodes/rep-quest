@@ -285,6 +285,26 @@ const Motion = (() => {
     refresh() {
       document.documentElement.dataset.motion = on() ? 'on' : mode() === 'off' ? 'off' : 'gentle';
     },
+    // A clear "added" stamp in the middle of the screen: a circle and tick that draw themselves.
+    added(title, sub) {
+      if (mode() === 'off') { toast(sub ? `${title}: ${sub}` : title); return; }
+      fxLayer().querySelector('.fx-added')?.remove();
+      const el = document.createElement('div');
+      el.className = 'fx-added';
+      el.innerHTML = '<svg viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="23" pathLength="1"/><path d="M15 27.5l7.5 7.5L38 19" pathLength="1"/></svg><b></b><span></span>';
+      el.querySelector('b').textContent = title;
+      el.querySelector('span').textContent = sub || '';
+      el.setAttribute('role', 'status');
+      fxLayer().appendChild(el);
+      const [c, p] = el.querySelectorAll('circle, path');
+      if (on()) {
+        sp(el, [{ opacity: 0, transform: 'translate(-50%, -50%) scale(.86)' }, { opacity: 1, transform: 'translate(-50%, -50%)' }], { bounce: 0.35, dur: 0.4 });
+        c.animate([{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], { duration: 380, easing: OUT, fill: 'both' });
+        p.animate([{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], { duration: 300, delay: 250, easing: OUT, fill: 'both' });
+        setTimeout(() => burst(innerWidth / 2, innerHeight * 0.42, { count: 22, spread: 110, velocity: 22, ticks: 70 }), 240);
+      } else el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 160 });
+      el.animate([{ opacity: 1 }, { opacity: 0, transform: 'translate(-50%, -50%) scale(.96)' }], { duration: 240, delay: 1150, easing: OUT, fill: 'forwards' }).onfinish = () => el.remove();
+    },
     // A chip or tick that was just switched on.
     chip(sel) {
       if (!on()) return;

@@ -248,7 +248,6 @@ const fatRange = w => [Math.round(0.5 * w), Math.round(1.5 * w)];
 const OVERLOAD_MODES = {
   double: { label: 'Reps, then weight', says: 'Work up to the top of your rep range on every set, then add weight.', refs: ['plotkin22'] },
   load: { label: 'Add weight', says: 'Keep reps the same and add weight whenever every set hits the target.', refs: ['plotkin22'] },
-  rir: { label: 'By effort', says: 'Log reps left in reserve. Weight goes up when sets feel easier than your target.', refs: ['zourdos16', 'refalo23'] },
   manual: { label: 'My own call', says: 'No automatic target. You still see last time and can pick any option.', refs: [] },
 };
 const roundTo = (v, step) => (step > 0 ? Math.round(v / step) * step : v);
@@ -303,13 +302,13 @@ function suggestNext(pe, history, start = null) {
   // In a live workout sets is the list of sets; in a plan it's a count.
   const planned = Array.isArray(pe.sets) ? Math.max(pe.sets.filter(s => isWorking(s) && s.type !== 'drop').length, 1) : pe.sets || 3;
   const lo = pe.lo || 8, hi = pe.hi || 12, inc = pe.inc ?? 2.5;
-  const mode = pe.mode || 'double';
-  const rirGoal = pe.rirGoal ?? 2;
+  // Reps in reserve aren't logged any more (removed 18 Nov 2026): every set stops about 2 reps short unless the coach says failure.
+  const mode = pe.mode === 'rir' ? 'double' : pe.mode || 'double';
   const last = history[0];
   if (!last) {
-    if (inc === 0) return { kind: 'first', w: null, reps: Array(planned).fill(hi), headline: `Aim for ${lo} to ${hi} ${unit}`, why: `Stop with 1 to 3 ${unit} in reserve.`, options: [], stalled: false };
-    if (start) return { kind: 'first', w: start.w, reps: Array(planned).fill(hi), headline: `Try about ${start.w} kg${start.each ? ' in each hand' : ''} for ${lo} to ${hi} ${unit}`, why: 'A starting guess from your body weight, and machines vary. Go lighter if it feels too heavy, or heavier if it feels easy. Stop with 2 to 3 reps left.', options: [], stalled: false };
-    return { kind: 'first', w: null, reps: Array(planned).fill(hi), headline: `Find a weight for ${lo} to ${hi} ${unit}`, why: `Pick a load that leaves 1 to 3 ${unit} in reserve.`, options: [], stalled: false };
+    if (inc === 0) return { kind: 'first', w: null, reps: Array(planned).fill(hi), headline: `Aim for ${lo} to ${hi} ${unit}`, why: `Stop each set with about 2 ${unit} left.`, options: [], stalled: false };
+    if (start) return { kind: 'first', w: start.w, reps: Array(planned).fill(hi), headline: `Try about ${start.w} kg${start.each ? ' in each hand' : ''} for ${lo} to ${hi} ${unit}`, why: 'A starting guess from your body weight, and machines vary. Go lighter if it feels too heavy, or heavier if it feels easy. Stop each set with about 2 reps left.', options: [], stalled: false };
+    return { kind: 'first', w: null, reps: Array(planned).fill(hi), headline: `Find a weight for ${lo} to ${hi} ${unit}`, why: `Pick a load that leaves about 2 ${unit} in reserve.`, options: [], stalled: false };
   }
   const sets = last.sets.filter(isWorking);
   if (!sets.length) return { kind: 'first', w: null, reps: Array(planned).fill(hi), headline: 'Repeat last session', why: '', options: [], stalled: false };
@@ -355,14 +354,6 @@ function suggestNext(pe, history, start = null) {
       return result('weight', opt, `Add ${inc} kg`, `All sets hit ${target} last time.`);
     }
     return result('repeat', pick('same'), 'Finish every set', `Hit ${target} on all ${planned} sets before adding weight.`);
-  }
-  if (mode === 'rir') {
-    const rirs = sets.map(s => s.rir).filter(v => v != null);
-    const rir = rirs.length ? avg(rirs) : null;
-    if (rir == null) return result('rep', pick('rep'), 'Log effort to steer this', 'Add reps in reserve to your sets and targets will follow them.');
-    if (rir >= rirGoal + 1 && !bodyweight) return result('weight', pick('weight'), `Add ${inc} kg`, `Sets felt easy: about ${round(rir, 1)} reps left, against a target of ${rirGoal}.`);
-    if (rir < rirGoal - 0.5) return result('repeat', pick('same'), 'Match last time', `Sets were very hard: about ${round(rir, 1)} reps left. Own this weight first.`);
-    return result('rep', pick('rep'), 'Add a rep', `Effort is on target at about ${round(rir, 1)} reps left.`);
   }
   // Double progression: reps first, then weight.
   if (allTop && !bodyweight) {

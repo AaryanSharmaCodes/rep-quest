@@ -102,6 +102,8 @@ function entryMicros(e) {
   });
   return { value, est };
 }
+// The ones he can tick on a day: everything not yet stopped by then.
+const suppsOn = k => state.supplements.filter(s => !s.retired || k < s.retired);
 const suppTaken = k => (peekDay(k).supps || []).filter(id => state.supplements.some(s => s.id === id));
 function dayMicros(k) {
   MicroMeta.load();
@@ -184,17 +186,17 @@ function microRow(key, r, opts = {}) {
 }
 // On Today until all of today's supplements are ticked.
 function suppToday() {
-  const taken = suppTaken(today()), all = taken.length >= state.supplements.length;
-  if (!state.supplements.length) return '';
-  return `<section class="block card supp-today"><div class="q-head"><h2>Supplements</h2>${all ? `<span class="dim sm">All ${state.supplements.length} taken</span>` : `<button class="link strong" data-a="allSupps" data-k="${today()}">Took all</button>`}</div>
-    <div class="supp-chips">${state.supplements.map(s => `<button class="supp-chip${taken.includes(s.id) ? ' on' : ''}" data-a="toggleSupp" data-id="${s.id}" data-k="${today()}" aria-pressed="${taken.includes(s.id)}">${taken.includes(s.id) ? i('tick') : ''}${esc(s.name)}</button>`).join('')}</div></section>`;
+  const list = suppsOn(today()), taken = suppTaken(today()), all = list.every(s => taken.includes(s.id));
+  if (!list.length) return '';
+  return `<section class="block card supp-today"><div class="q-head"><h2>Supplements</h2>${all ? `<span class="dim sm">All ${list.length} taken</span>` : `<button class="link strong" data-a="allSupps" data-k="${today()}">Took all</button>`}</div>
+    <div class="supp-chips">${list.map(s => `<button class="supp-chip${taken.includes(s.id) ? ' on' : ''}" data-a="toggleSupp" data-id="${s.id}" data-k="${today()}" aria-pressed="${taken.includes(s.id)}">${taken.includes(s.id) ? i('tick') : ''}${esc(s.name)}</button>`).join('')}</div></section>`;
 }
 function suppCard(k) {
-  const taken = suppTaken(k);
-  return `<section class="block card"><div class="q-head"><h2>Supplements</h2><span class="dim sm">${taken.length} of ${state.supplements.length} taken</span></div>
-    <div class="supp-list">${state.supplements.map(s => `<button class="supp${taken.includes(s.id) ? ' on' : ''}" data-a="toggleSupp" data-id="${s.id}" data-k="${k}" aria-pressed="${taken.includes(s.id)}">
+  const list = suppsOn(k), taken = suppTaken(k).filter(id => list.some(s => s.id === id));
+  return `<section class="block card"><div class="q-head"><h2>Supplements</h2><span class="dim sm">${taken.length} of ${list.length} taken</span></div>
+    <div class="supp-list">${list.map(s => `<button class="supp${taken.includes(s.id) ? ' on' : ''}" data-a="toggleSupp" data-id="${s.id}" data-k="${k}" aria-pressed="${taken.includes(s.id)}">
       <i class="supp-tick">${i('tick')}</i><span><b>${esc(s.name)}</b><small>${esc(s.detail)}</small></span></button>`).join('')}</div>
-    ${taken.length < state.supplements.length ? `<button class="link strong" data-a="allSupps" data-k="${k}">Took all ${state.supplements.length}</button>` : ''}
+    ${taken.length < list.length ? `<button class="link strong" data-a="allSupps" data-k="${k}">Took all ${list.length}</button>` : ''}
   </section>`;
 }
 function viewMicros() {
@@ -265,8 +267,8 @@ function microReport(from, to) {
   const days = microDays(from, to);
   const all = datesIn(from, to).filter(k => k <= today());
   const supps = [
-    'Supplements taken: ' + state.supplements.map(s => `${s.name} ${all.filter(k => suppTaken(k).includes(s.id)).length}/${all.length} days`).join(', '),
-    'Supplement labels: ' + state.supplements.map(s => `${s.name} (${s.detail}): ${s.extra}`).join('; '),
+    'Supplements taken: ' + state.supplements.filter(s => !s.retired || s.retired > from).map(s => `${s.name} ${all.filter(k => suppTaken(k).includes(s.id)).length}/${all.filter(k => !s.retired || k < s.retired || suppTaken(k).includes(s.id)).length} days`).join(', '),
+    'Supplement labels: ' + state.supplements.filter(s => !s.retired || s.retired > from).map(s => `${s.name} (${s.detail}): ${s.extra}${s.retired ? ` [stopped ${dayLabel(s.retired)}]` : ''}`).join('; '),
   ];
   if (!days.length) return ['MICRONUTRIENTS', 'No days with food logged.', ...supps];
   const r = periodMicros(days);

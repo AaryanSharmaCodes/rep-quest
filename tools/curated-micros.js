@@ -1,5 +1,6 @@
 // Which INDB or USDA food lends its vitamins and minerals to each hand-written food in curated-foods.js.
-// i: INDB, s: USDA FNDDS, f: USDA Foundation, l: USDA SR Legacy. Missing names have no good match and show as no data.
+// i: INDB, s: USDA FNDDS, f: USDA Foundation, l: USDA SR Legacy, n: IFCT 2017. Missing names have no good match and show as no data.
+// The match's values are scaled by protein to the curated food (see build-foods.mjs). ['src:name', { key: null }] drops a value the match gets wrong.
 export const CURATED_MICROS = {
   'Roti / chapati / phulka, no ghee': 'i:Chapati/Roti',
   'Roti with ghee': 'i:Chapati/Roti',
@@ -19,8 +20,8 @@ export const CURATED_MICROS = {
   'Pav / bun': 's:Roll, white, soft',
   'Missi roti': 'i:Chapati/Roti',
   'Makki ki roti': 'i:Makki ki roti',
-  'Bajra roti': 'i:Chapati/Roti',
-  'Jowar roti': 'i:Chapati/Roti',
+  'Bajra roti': 'n:Bajra',
+  'Jowar roti': 'n:Jowar',
   'Rumali roti': 'i:Chapati/Roti',
   'Appam': 'i:Appam',
   'Malabar parotta': 's:Bread, paratha',
@@ -147,11 +148,13 @@ export const CURATED_MICROS = {
   'Chicken noodles / chowmein': 'i:Chicken chowmein',
   'Hakka noodles': 'i:Vegetable chowmein',
   'Manchurian, veg gravy': 'i:Cabbage manchurian (Pattagobhi manchurian)',
-  'Instant noodles / Maggi, dry': 'l:Soup, ramen noodle, dry, any flavor, reduced fat, reduced sodium',
-  'Maggi, cooked': 's:Soup, ramen noodles, water added',
-  'Masala peanuts': 'f:Peanuts, raw',
+  // Sodium from the same Maggi 2-Minute Masala label as the macros (1,000 mg per 100 g); USDA ramen has 1,860 mg.
+  'Instant noodles / Maggi, dry': ['l:Soup, ramen noodle, any flavor, dry', { na: 1000 }],
+  'Maggi, cooked': ['s:Soup, ramen noodles, water added', { na: 350 }], // the 1,000 mg label figure, 70 g cooked to 200 g
+  'Masala peanuts': 'l:Peanuts, all types, dry-roasted, with salt',
   'Makhana, roasted': 'l:Seeds, lotus seeds, dried',
-  'Bhujia / namkeen': 'l:Chickpea flour (besan)',
+  // Plain besan has almost no sodium; bhujia is salted, so sodium is left to the snack estimate.
+  'Bhujia / namkeen': ['l:Chickpea flour (besan)', { na: null }],
   'Potato chips': 's:Potato chips, plain',
   'Parle-G biscuit': 'l:Cookies, Marie biscuit',
   'Marie biscuit': 'l:Cookies, Marie biscuit',
@@ -210,7 +213,7 @@ export const CURATED_MICROS = {
   'Mayonnaise': 's:Mayonnaise, regular',
   'Sugar': 'f:Sugars, granulated',
   'Honey': 'l:Honey',
-  'Jaggery / gur': 'l:Sugars, brown',
+  'Jaggery / gur': 'n:Jaggery, cane',
   'Whole wheat bread': 's:Bread, whole wheat',
   'White bread': 's:Bread, white',
   'Burger, veg': 's:Turkey or chicken burger, on white bun',

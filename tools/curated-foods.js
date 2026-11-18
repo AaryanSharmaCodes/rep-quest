@@ -3,8 +3,11 @@
 // [name, kcal, protein, carbs, fat (per 100 g), serving grams, serving name]
 export const CURATED = [
   // Breads
-  ['Roti / chapati / phulka, no ghee', 297, 11.3, 46.4, 7.5, 40, '1 roti'],
-  ['Roti with ghee', 340, 10.5, 44, 13, 45, '1 roti'],
+  // IFCT 2017 whole wheat atta (320 kcal, 10.6 g protein, 64.2 g carbs, 1.5 g fat, 11% water) cooked to a roti with about 35% water.
+  // Earlier values (297 kcal, 7.5 g fat) were USDA's commercial chapati, which is made with shortening.
+  ['Roti / chapati / phulka, no ghee', 235, 7.7, 46.9, 1.1, 40, '1 roti'],
+  // 40 g roti plus 1 tsp (5 g) ghee.
+  ['Roti with ghee', 309, 6.8, 41.7, 12.1, 45, '1 roti'],
   ['Tandoori roti', 280, 9, 53, 3.5, 60, '1 roti'],
   ['Paratha, plain', 316, 7, 45, 12, 70, '1 paratha'],
   ['Aloo paratha', 233, 5, 33, 9, 120, '1 paratha'],
@@ -161,8 +164,10 @@ export const CURATED = [
   ['Chicken noodles / chowmein', 170, 8, 24, 5, 300, '1 plate'],
   ['Hakka noodles', 170, 4, 27, 5, 250, '1 plate'],
   ['Manchurian, veg gravy', 145, 3, 15, 8, 200, '1 bowl'],
-  ['Instant noodles / Maggi, dry', 447, 9, 62, 17, 70, '1 packet'],
-  ['Maggi, cooked', 145, 3, 20, 5.5, 200, '1 packet cooked'],
+  // Maggi 2-Minute Masala label as most often entered on Open Food Facts (India); was USDA ramen (447 kcal, 17 g fat).
+  ['Instant noodles / Maggi, dry', 384, 8.2, 59.6, 12.5, 70, '1 packet'],
+  // One 70 g packet cooked to about 200 g.
+  ['Maggi, cooked', 134, 2.9, 20.9, 4.4, 200, '1 packet cooked'],
   ['Masala peanuts', 520, 22, 25, 37, 30, '1 handful'],
   ['Makhana, roasted', 350, 10, 75, 0.5, 25, '1 bowl'],
   ['Bhujia / namkeen', 540, 12, 42, 36, 30, '1 handful'],
@@ -228,7 +233,7 @@ export const CURATED = [
   ['Walnuts', 654, 15, 14, 65, 15, '4 halves'],
   ['Peanuts', 567, 25.8, 16, 49, 30, '1 handful'],
   ['Peanut butter', 598, 22.5, 22, 51, 16, '1 tbsp'],
-  ['Ghee', 900, 0, 0, 100, 5, '1 tsp'],
+  ['Ghee', 876, 0.3, 0, 99.5, 5, '1 tsp'], // USDA clarified butter
   ['Butter', 717, 0.9, 0.1, 81, 10, '1 pat'],
   ['Cooking oil', 884, 0, 0, 100, 5, '1 tsp'],
   ['Mayonnaise', 680, 1, 1, 75, 15, '1 tbsp'],

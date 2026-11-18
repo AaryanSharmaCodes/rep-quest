@@ -113,7 +113,7 @@ const SHEETS = {
   },
   saveMeal(s) {
     const items = peekDay(ui.foodDate).meals?.[s.slot] || [];
-    return `${sheetHead('Save as a meal', `${items.length} foods, ${fmt(sum(items.map(e => e.kcal)))} kcal`)}
+    return `${sheetHead('Save as a meal', `${items.length} ${items.length === 1 ? 'food' : 'foods'}, ${fmt(sum(items.map(e => e.kcal)))} kcal`)}
       <div class="form">${field('Name', 'meal-name', '', 'placeholder="Usual breakfast"')}<button class="btn solid wide" data-a="saveMeal">Save meal</button></div>`;
   },
   usda() {
@@ -150,15 +150,15 @@ const SHEETS = {
   exercise(s) {
     const e = sheetRow(s);
     if (!e) return sheetHead('Removed');
-    const mode = OVERLOAD_MODES[e.mode || 'double'];
+    const mode = OVERLOAD_MODES[e.mode] || OVERLOAD_MODES.double;
     const inWorkout = s.i != null;
     return `${sheetHead(e.name, MUSCLE_NAMES[e.p] || '')}
       <h3 class="sh-sub">How it progresses</h3>
-      <div class="choice">${Object.entries(OVERLOAD_MODES).map(([k, m]) => `<button class="${(e.mode || 'double') === k ? 'on' : ''}" data-a="rowSet" data-k="mode" data-v="${k}">${esc(m.label)}</button>`).join('')}</div>
+      <div class="choice">${Object.entries(OVERLOAD_MODES).map(([k, m]) => `<button class="${(OVERLOAD_MODES[e.mode] ? e.mode : 'double') === k ? 'on' : ''}" data-a="rowSet" data-k="mode" data-v="${k}">${esc(m.label)}</button>`).join('')}</div>
       <p class="sm dim">${esc(mode.says)} ${refLinks(mode.refs)}</p>
       <div class="form">
         <div class="three">${inWorkout ? '' : rowField('Sets', 'sets', e.sets)}${rowField(`Low ${unitWord(e)}`, 'lo', e.lo)}${rowField(`High ${unitWord(e)}`, 'hi', e.hi)}</div>
-        <div class="three">${rowField('Weight jump, kg', 'inc', e.inc, 'decimal')}${rowField('Rest, sec', 'rest', e.rest)}${e.mode === 'rir' ? rowField('Target RIR', 'rirGoal', e.rirGoal ?? 2) : ''}</div>
+        <div class="three">${rowField('Weight jump, kg', 'inc', e.inc, 'decimal')}${rowField('Rest, sec', 'rest', e.rest)}</div>
         <label>Note<input data-f="row" data-k="note" value="${esc(e.note || '')}" placeholder="Seat 4, slow on the way down"></label>
         <label class="row-check"><input type="checkbox" class="sw" data-f="rowBool" data-k="superset" ${e.superset ? 'checked' : ''}><span>Superset with the next exercise</span></label>
         ${inWorkout ? `<label class="row-check"><input type="checkbox" class="sw" id="mirror-plan" data-f="mirror" ${ui.mirrorPlan !== false ? 'checked' : ''}><span>Save these to my plan too</span></label>` : ''}
@@ -240,7 +240,7 @@ const SHEETS = {
     return `${sheetHead('Edit workout')}
       <div class="form">${`<label>Name<input data-f="dayName" value="${esc(day.name)}"></label>`}</div>
       <ol class="edit-list">${day.exercises.map((e, n) => `<li>
-        <button class="edit-name" data-a="openSheet" data-type="exercise" data-day="${day.id}" data-row="${e.id}"><b>${esc(e.name)}</b><span>${e.sets} × ${e.lo} to ${e.hi}, ${esc(OVERLOAD_MODES[e.mode || 'double'].label.toLowerCase())}</span></button>
+        <button class="edit-name" data-a="openSheet" data-type="exercise" data-day="${day.id}" data-row="${e.id}"><b>${esc(e.name)}</b><span>${e.sets} × ${e.lo} to ${e.hi}, ${esc((OVERLOAD_MODES[e.mode] || OVERLOAD_MODES.double).label.toLowerCase())}</span></button>
         <button class="ic-btn" data-a="openSheet" data-type="swap" data-day="${day.id}" data-row="${e.id}" aria-label="Swap">${i('swap')}</button>
         <button class="ic-btn" data-a="moveRow" data-n="${n}" data-by="-1" aria-label="Move up">${i('up')}</button>
         <button class="ic-btn" data-a="moveRow" data-n="${n}" data-by="1" aria-label="Move down">${i('down')}</button>
@@ -385,7 +385,7 @@ function foodResults(s) {
   if (tab === 'recent') return state.recentFoods.length ? `<ul class="food-list">${state.recentFoods.map(f => foodRow(f)).join('')}</ul>` : '<p class="empty">Foods you add show up here.</p>';
   if (tab === 'mine') return state.customFoods.length ? `<ul class="food-list">${state.customFoods.map(f => foodRow({ ...f, src: 'm' })).join('')}</ul>` : '<p class="empty">Foods you save with typed macros show up here.</p>';
   if (tab === 'meals') {
-    return state.savedMeals.length ? `<ul class="rows">${state.savedMeals.map(m => `<li class="saved-meal"><button class="row" data-a="logMeal" data-id="${m.id}"><span>${esc(m.name)}<em>${m.items.length} foods, ${fmt(sum(m.items.map(e => e.p)))} g protein</em></span><span class="dim">${fmt(sum(m.items.map(e => e.kcal)))}</span></button><button class="ic-btn" data-a="deleteMeal" data-id="${m.id}" aria-label="Delete meal">${i('close')}</button></li>`).join('')}</ul>` : '<p class="empty">Add foods to a meal, then choose "Save as a meal" to repeat it in one tap.</p>';
+    return state.savedMeals.length ? `<ul class="rows">${state.savedMeals.map(m => `<li class="saved-meal"><button class="row" data-a="logMeal" data-id="${m.id}"><span>${esc(m.name)}<em>${m.items.length} ${m.items.length === 1 ? 'food' : 'foods'}, ${fmt(sum(m.items.map(e => e.p)))} g protein</em></span><span class="dim">${fmt(sum(m.items.map(e => e.kcal)))}</span></button><button class="ic-btn" data-a="deleteMeal" data-id="${m.id}" aria-label="Delete meal">${i('close')}</button></li>`).join('')}</ul>` : '<p class="empty">Add foods to a meal, then choose "Save as a meal" to repeat it in one tap.</p>';
   }
   if (!s.q) return foodSuggestions(s);
   const parts = [];
