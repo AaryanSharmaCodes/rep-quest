@@ -8,7 +8,7 @@ const COACH_UPDATES = [
     id: 1, date: '2026-11-15', from: '2026-11-16', title: 'Week of 16 Nov',
     targets: { kcal: 2825, protein: 160, fat: 75, carbs: 377 },
     reason: 'Coach: check-in #1, fat up to 75 g, same calories',
-    others: 'Creatine monohydrate 5 g (raised from 3 g on 15 Nov), liposomal glutathione 600 mg',
+    others: 'Creatine monohydrate 5 g (raised from 3 g on 15 Nov). Nova-Glow replaced liposomal glutathione 600 mg on 18 Nov.',
     rules: [
       'Train all 5 days. Lower body is never the day you skip. If one has to go, drop Push: chest already gets plenty.',
       'Training at home? Start the Lower body day and tap "Do home workout instead". Not Push.',
@@ -70,7 +70,7 @@ function applyCoach(s) {
   COACH_UPDATES.forEach(u => {
     if (done.includes(u.id)) {
       // Already applied: the notes and lift calls can still be reworded in a later release, so the saved copy follows them.
-      if (s.coach?.id === u.id) s.coach = { ...s.coach, title: u.title, rules: u.rules, lifts: u.lifts };
+      if (s.coach?.id === u.id) s.coach = { ...s.coach, title: u.title, rules: u.rules, lifts: u.lifts, others: u.others || s.coach.others || '' };
       return;
     }
     if (u.targets) {
